@@ -26,7 +26,7 @@ struct FFrame {
 // ProcessEvent hook
 // ======================================================================
 
-typedef void (*tProcessEvent)(UObject* Context, UObject* Function, void* Parms, void* Result);
+typedef void (*tProcessEvent)(UObject* Context, UFunction* Function, void* Parms, void* Result);
 tProcessEvent ProcessEvent = nullptr;
 
 tProcessEvent ProcessEvent_orig = nullptr;
