@@ -7,20 +7,36 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1MedigelTest", "LE1Medige
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SeqActLog Enabler", "SeqActLog Enabler\SeqActLog Enabler.vcxproj", "{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1StreamingLevelsHUD", "LE1StreamingLevelsHUD\LE1StreamingLevelsHUD.vcxproj", "{24261DB1-E217-4234-B048-1ACEA2F67237}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Debug|x64.ActiveCfg = Debug|x64
 		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Debug|x64.Build.0 = Debug|x64
+		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Debug|x86.ActiveCfg = Debug|x64
 		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Release|x64.ActiveCfg = Release|x64
 		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Release|x64.Build.0 = Release|x64
+		{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}.Release|x86.ActiveCfg = Release|x64
 		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Debug|x64.ActiveCfg = Debug|x64
 		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Debug|x64.Build.0 = Debug|x64
+		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Debug|x86.ActiveCfg = Debug|x64
 		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Release|x64.ActiveCfg = Release|x64
 		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Release|x64.Build.0 = Release|x64
+		{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}.Release|x86.ActiveCfg = Release|x64
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x64.ActiveCfg = Debug|x64
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x64.Build.0 = Debug|x64
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x86.ActiveCfg = Debug|Win32
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x86.Build.0 = Debug|Win32
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x64.ActiveCfg = Release|x64
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x64.Build.0 = Release|x64
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x86.ActiveCfg = Release|Win32
+		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

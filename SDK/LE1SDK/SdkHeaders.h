@@ -66,7 +66,12 @@ public:
 	int Num() 
 	{ 
 		return this->Count; 
-	}; 
+	};
+
+	bool Any()
+	{
+		return this->Count > 0;
+	}
 
 	const T& operator() ( int i ) const 
 	{ 
