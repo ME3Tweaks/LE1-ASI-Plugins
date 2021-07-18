@@ -184,17 +184,17 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 
 SPI_IMPLEMENT_ATTACH
 {
-	Common::OpenConsole();
+	//Common::OpenConsole();
 
 	auto _ = SDKInitializer::Instance();
-	writeln(L"Attach - names at 0x%p, objects at 0x%p",
+	/*writeln(L"Attach - names at 0x%p, objects at 0x%p",
 		SDKInitializer::Instance()->GetBioNamePools(),
-		SDKInitializer::Instance()->GetObjects());
+		SDKInitializer::Instance()->GetObjects());*/
 
 	if (auto rc = InterfacePtr->FindPattern((void**)&ProcessEvent, "40 55 41 56 41 57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
 		rc != SPIReturn::Success)
 	{
-		writeln(L"Attach - failed to find ProcessEvent pattern: %d / %s", rc, SPIReturnToString(rc));
+		//writeln(L"Attach - failed to find ProcessEvent pattern: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
 
@@ -202,7 +202,7 @@ SPI_IMPLEMENT_ATTACH
 	if (auto rc = InterfacePtr->InstallHook(SLHHOOK "ProcessEvent", ProcessEvent, biohud_hook, (void**)&ProcessEvent_orig);
 		rc != SPIReturn::Success)
 	{
-		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
+		//writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
 
@@ -211,6 +211,6 @@ SPI_IMPLEMENT_ATTACH
 
 SPI_IMPLEMENT_DETACH
 {
-	Common::CloseConsole();
+	//Common::CloseConsole();
 	return true;
 }
