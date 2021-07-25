@@ -8,6 +8,7 @@
 #include "../Interface.h"
 #include "../Common.h"
 #include "../SDK/LE1SDK/SdkHeaders.h"
+#include "UnrealScriptDefinitions.h"
 #pragma comment(lib, "shlwapi.lib");
 
 #define SLHHOOK "UnrealscriptDebugger_"
@@ -52,7 +53,7 @@ tProcessInternal ProcessInternal_orig = nullptr;
 void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
 {
 	auto node = Stack->Node;
-	logFile << "Executing: " << node->GetFullPath() << "On Object: " << Stack->Object->GetFullPath() << "\n";
+	logFile << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
 	ProcessInternal_orig(Context, Stack, Result);
 }
 
@@ -91,6 +92,66 @@ void CallFunction_hook(UObject* Context, LE1FFrame* Stack, void* Result, UFuncti
 	CallFunction_orig(Context, Stack, Result, Function);
 }
 
+
+// ======================================================================
+// ExecutionLoop detour
+// ======================================================================
+typedef void (*tNativeFunction) (UObject* Context, LE1FFrame* Stack, void* Result);
+void* ExecutionLoop = nullptr;
+void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, tNativeFunction* GNatives)
+{
+	byte buff[64];
+	while (*Stack->Code != (byte)OpCodes::Return) 
+	{
+		int idx = *Stack->Code++;
+		GNatives[idx](Context, Stack, buff);
+	}
+	Stack->Code++; //skip Return opcode
+	int idx = *Stack->Code++;
+	GNatives[idx](Context, Stack, Result); //execute statement that places return value in Result
+}
+
+bool PatchExecutionLoop() 
+{
+
+	byte patch[] = { 0x4c, 0x8d, 0x0d, 0x5c, 0xf2, 0x5a, 0x01, //LEA R9, [GNatives] //load the address of the native function array into the 4th argument register
+						   0x4C, 0x8B, 0xC5, //MOV R8, RBP //Move the Result pointer into the 3rd argument register
+						   0x48, 0x8B, 0xD3, //MOV RDX, RBX //Move the FFrame pointer into the 2nd argument register
+						   0x48, 0x89, 0xF9, //MOV RCX, RDI //Move the this pointer into the 1st argument register
+						   0x49, 0xBE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, //MOV R14, 0xFFFFFFFFFFFFFFFF //put address of ExecutionLoop_hook into R14 (actual address filled in at runtime) 
+						   0x41, 0xFF, 0xD6,  //CALL R14 //Call ExecutionLoop_hook
+
+						   //remaining bytes are NOPs of various sizes: https://stackoverflow.com/questions/43991155/what-does-nop-dword-ptr-raxrax-x64-assembly-instruction-do/50594130#50594130
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00,
+						   0x0F, 0x1F, 0x44, 0x00, 0x00 };
+
+	//place the absolute address of ExecutionLoop_hook into the patch
+	void* funcPtr = ExecutionLoop_hook;
+	memcpy(patch + 18, &funcPtr, sizeof(funcPtr));
+
+	//make the memory we're going to patch writeable
+	DWORD  oldProtect;
+	if (!VirtualProtect(ExecutionLoop, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
+		return false;
+	
+	//overwrite with our patch
+	memcpy(ExecutionLoop, patch, sizeof(patch));
+
+	//restore the memory's old protection level
+	VirtualProtect(ExecutionLoop, sizeof(patch), oldProtect, &oldProtect);
+	return true;
+}
+
 SPI_IMPLEMENT_ATTACH
 {
 	//Common::OpenConsole();
@@ -112,6 +173,19 @@ SPI_IMPLEMENT_ATTACH
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to hook ProcessInternal: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+
+	if (auto rc = InterfacePtr->FindPattern((void**)&ExecutionLoop, "4c 8d 35 5c f2 5a 01 80 38 04 74 30 0f 1f 80 00 00 00 00");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find ExecutionLoop pattern: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+
+	//sure hope another thread isn't trying to execute ProcessInternal while we're patching it here...
+	if (!PatchExecutionLoop())
+	{
 		return false;
 	}
 
