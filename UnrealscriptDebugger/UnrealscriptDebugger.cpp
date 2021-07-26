@@ -9,7 +9,7 @@
 #include "../Common.h"
 #include "../SDK/LE1SDK/SdkHeaders.h"
 #include "UnrealScriptDefinitions.h"
-#pragma comment(lib, "shlwapi.lib");
+#pragma comment(lib, "shlwapi.lib")
 
 #define SLHHOOK "UnrealscriptDebugger_"
 
@@ -41,21 +41,6 @@ struct LE1FFrame
 TCHAR logPath[MAX_PATH];
 std::ofstream logFile;
 
-
-// ======================================================================
-// ProcessInternal hook
-// ======================================================================
-
-
-typedef void (*tProcessInternal)(UObject* Context, LE1FFrame* Stack, void* Result);
-tProcessInternal ProcessInternal = nullptr;
-tProcessInternal ProcessInternal_orig = nullptr;
-void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
-{
-	auto node = Stack->Node;
-	logFile << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
-	ProcessInternal_orig(Context, Stack, Result);
-}
 
 // ======================================================================
 // ProcessEvent hook
@@ -100,15 +85,37 @@ typedef void (*tNativeFunction) (UObject* Context, LE1FFrame* Stack, void* Resul
 void* ExecutionLoop = nullptr;
 void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, tNativeFunction* GNatives)
 {
+	auto node = Stack->Node;
+	logFile << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
+	const auto beginOffset = Stack->Code;
+
 	byte buff[64];
 	while (*Stack->Code != (byte)OpCodes::Return) 
 	{
+		logFile << "    Statement at: " << std::hex << Stack->Code - beginOffset << "\n";
 		int idx = *Stack->Code++;
 		GNatives[idx](Context, Stack, buff);
 	}
+	logFile << "    Statement at: " << std::hex << Stack->Code - beginOffset << "\n";
 	Stack->Code++; //skip Return opcode
-	int idx = *Stack->Code++;
+	const int idx = *Stack->Code++;
 	GNatives[idx](Context, Stack, Result); //execute statement that places return value in Result
+}
+
+bool PatchMemory(const void* patch, SIZE_T patchSize)
+{
+	//make the memory we're going to patch writeable
+	DWORD  oldProtect;
+	if (!VirtualProtect(ExecutionLoop, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
+		return false;
+
+	//overwrite with our patch
+	memcpy(ExecutionLoop, patch, patchSize);
+
+	//restore the memory's old protection level
+	VirtualProtect(ExecutionLoop, patchSize, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), ExecutionLoop, patchSize);
+	return true;
 }
 
 bool PatchExecutionLoop() 
@@ -139,18 +146,47 @@ bool PatchExecutionLoop()
 	void* funcPtr = ExecutionLoop_hook;
 	memcpy(patch + 18, &funcPtr, sizeof(funcPtr));
 
-	//make the memory we're going to patch writeable
-	DWORD  oldProtect;
-	if (!VirtualProtect(ExecutionLoop, sizeof(patch), PAGE_EXECUTE_READWRITE, &oldProtect))
-		return false;
-	
-	//overwrite with our patch
-	memcpy(ExecutionLoop, patch, sizeof(patch));
-
-	//restore the memory's old protection level
-	VirtualProtect(ExecutionLoop, sizeof(patch), oldProtect, &oldProtect);
-	return true;
+	return PatchMemory(patch, sizeof(patch));
 }
+
+bool RestoreExecutionLoop()
+{
+	const byte originalExecutionLoopBytes[] = { 0x4c, 0x8d, 0x35, 0x5c, 0xf2, 0x5a, 0x01, 0x80, 0x38, 0x04, 0x74, 0x30, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x43, 0x24, 0x4c, 0x8d, 0x44, 0x24, 0x30, 0x48, 0x8b, 0xd3, 0x0f, 0xb6, 0x08, 0x48, 0xff, 0xc0, 0x48, 0x89, 0x43, 0x24, 0x8b, 0xc1, 0x48, 0x8b, 0x4b, 0x1c, 0x41, 0xff, 0x14, 0xc6, 0x48, 0x8b, 0x43, 0x24, 0x80, 0x38, 0x04, 0x75, 0xd7, 0x48, 0xff, 0xc0, 0x4c, 0x8b, 0xc5, 0x48, 0x89, 0x43, 0x24, 0x48, 0x8b, 0xd3, 0x0f, 0xb6, 0x08, 0x48, 0xff, 0xc0, 0x48, 0x89, 0x43, 0x24, 0x8b, 0xc1, 0x48, 0x8b, 0x4b, 0x1c, 0x41, 0xff, 0x14, 0xc6, 0x48, 0x8b, 0x43, 0x24, 0x4c, 0x8b, 0xb4, 0x24, 0x80, 0x00, 0x00, 0x00, 0x80, 0x38, 0x41, 0x75, 0x17, 0x48, 0x8b, 0x4b, 0x1c, 0x48, 0xff, 0xc0, 0x4c, 0x8b, 0xc5, 0x48, 0x89, 0x43, 0x24, 0x48, 0x8b, 0xd3, 0xff, 0x15, 0xe6, 0xf3, 0x5a, 0x01 };
+
+	return PatchMemory(originalExecutionLoopBytes, sizeof(originalExecutionLoopBytes));
+}
+
+bool debbuggingFunction = false;
+
+// ======================================================================
+// ProcessInternal hook
+// ======================================================================
+
+
+typedef void (*tProcessInternal)(UObject* Context, LE1FFrame* Stack, void* Result);
+tProcessInternal ProcessInternal = nullptr;
+tProcessInternal ProcessInternal_orig = nullptr;
+void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
+{
+	auto node = Stack->Node;
+	bool removePatch = false;
+	//logFile << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
+
+	if (!debbuggingFunction && !strcmp(node->Name.GetName(), "ClearSmoothing") && !strcmp(node->GetFullPath(), "Engine.PlayerInput.ClearSmoothing")) //hardcoding for development purposes. Will want to have a way for LEX to communicate the method to debug
+	{
+		debbuggingFunction = true;
+		PatchExecutionLoop();
+		removePatch = true;
+	}
+
+	ProcessInternal_orig(Context, Stack, Result);
+
+	if (removePatch)
+	{
+		RestoreExecutionLoop();
+	}
+}
+
 
 SPI_IMPLEMENT_ATTACH
 {
@@ -180,12 +216,6 @@ SPI_IMPLEMENT_ATTACH
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to find ExecutionLoop pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-
-	//sure hope another thread isn't trying to execute ProcessInternal while we're patching it here...
-	if (!PatchExecutionLoop())
-	{
 		return false;
 	}
 
