@@ -9,12 +9,17 @@
 #include "../Interface.h"
 #include "../Common.h"
 #include "../SDK/LE1SDK/SdkHeaders.h"
+#include "../ScreenLogger.h"
+#include "../ME3TweaksHeader.h"
 
 #define MYHOOK "LE1SeqActLogEnabler_"
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"0.1.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"1.0.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
+
+ME3TweaksASILogger logger("SeqAct_Log Enabler v1", "SeqActLog.txt");
+ScreenLogger screenLogger(L"SeqAct_Log Enabler v1");
 
 
 std::wstringstream& operator<<(std::wstringstream& ss, const FString& fStr)
@@ -42,7 +47,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
         const auto numVarLinks = seqLog->VariableLinks.Count;
         std::wstringstream ss;
 
-        // This doesn't work
+        // Todo: Patch the function that removes m_aObjComment
         /*if(seqLog->bOutputObjCommentToScreen == 1ul)
         {
             const auto numLines = seqLog->m_aObjComment.Num();
@@ -90,7 +95,18 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
             }
             
         }
-        writeln(L"SeqAct_Log: %s", ss.str().c_str());
+        const wstring msg = ss.str();
+        writeln(L"SeqAct_Log: %s", msg.c_str());
+        if(msg.size() > 0)
+        {
+            logger.writeToLog(msg.c_str(), true, true);
+            screenLogger.LogMessage(msg);
+        }
+    }
+    else if(!strcmp(Function->GetFullName(), "Function SFXGame.BioHUD.PostRender"))
+    {
+        const auto hud = static_cast<ABioHUD*>(Context);
+        screenLogger.PostRenderer(hud);
     }
     ProcessEvent_orig(Context, Function, Parms, Result);
 }

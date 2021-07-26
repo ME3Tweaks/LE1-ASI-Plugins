@@ -73,6 +73,16 @@ public:
 		return this->Count > 0;
 	}
 
+	void Add ( T InputData ) 
+	{
+		if (Count >= Max)
+		{
+			Max = Count + 3*Count/8 + 16;
+			Data = (T*)realloc(Data, sizeof(T) * Max);
+		}
+		Data[Count++] = InputData;
+	}; 
+
 	const T& operator() ( int i ) const 
 	{ 
 		return this->Data[ i ]; 
