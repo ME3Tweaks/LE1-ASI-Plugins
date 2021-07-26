@@ -23,6 +23,9 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 // ======================================================================
 
 
+// THIS IS WIP DEMO PROJECT
+// Will probably get merged into AutoLoad enabler
+
 typedef void (*tProcessEvent)(UObject* Context, UFunction* Function, void* Parms, void* Result);
 tProcessEvent ProcessEvent = nullptr;
 tProcessEvent ProcessEvent_orig = nullptr;
