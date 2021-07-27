@@ -19,6 +19,32 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 
 ME3TweaksASILogger logger("Kismet Logger v1", "KismetLog.txt");
 
+
+void GetUninstancedPathInternal(UObject* object, char* str)
+{
+	if (object->Outer)
+	{
+		GetUninstancedPathInternal(object->Outer, str);
+		strcat_s(str, 512, ".");
+	}
+	strcat_s(str, 512, object->GetName());
+}
+
+/// <summary>
+/// Same as GetFullPath except it's not instanced
+/// </summary>
+/// <param name="object"></param>
+/// <returns></returns>
+/// 
+char* GetUninstancedPath(UObject* object)
+{
+    static char* str = new char[512];
+    str[0] = '\0';
+    GetUninstancedPathInternal(object, str);
+
+    return str;
+}
+
 // ProcessEvent hook
 // ======================================================================
 
@@ -31,17 +57,12 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
     if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
     {
         const auto op = reinterpret_cast<USequenceOp*>(Context);
-        char* name = op->Name.GetName();
-        std::string fpstring = op->GetFullPath();
+        char* className = op->Class->Name.GetName();
+        char* path = GetUninstancedPath(op);
 		char* packagename = op->GetPackageName().GetName();
         int index = op->Name.Number;
 
-        // This is a cheap hack because GetFullPath returns the proper instanced name (where 1 is name_0) and kismet logger doesn't want that
-        // This was easier to change. This will break if you have a _1000
-        std::size_t found = fpstring.find_last_of('_');
-        if(found >= fpstring.size() - 4) fpstring.erase(found);
-
-		logger.writeToLog(string_format("(%s) %s %s_%i\n", packagename, name, fpstring.data(), index), true);
+		logger.writeToLog(string_format("(%s) %s %s_%i\n", packagename, className, path, index), true);
     }
     ProcessEvent_orig(Context, Function, Parms, Result);
 }
