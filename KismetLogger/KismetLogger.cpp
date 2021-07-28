@@ -20,30 +20,6 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 ME3TweaksASILogger logger("Kismet Logger v1", "KismetLog.txt");
 
 
-void GetUninstancedPathInternal(UObject* object, char* str)
-{
-	if (object->Outer)
-	{
-		GetUninstancedPathInternal(object->Outer, str);
-		strcat_s(str, 512, ".");
-	}
-	strcat_s(str, 512, object->GetName());
-}
-
-/// <summary>
-/// Same as GetFullPath except it's not instanced
-/// </summary>
-/// <param name="object"></param>
-/// <returns></returns>
-/// 
-char* GetUninstancedPath(UObject* object)
-{
-    static char* str = new char[512];
-    str[0] = '\0';
-    GetUninstancedPathInternal(object, str);
-
-    return str;
-}
 
 // ProcessEvent hook
 // ======================================================================
@@ -57,12 +33,9 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
     if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
     {
         const auto op = reinterpret_cast<USequenceOp*>(Context);
+        char* fullInstancedPath = op->GetFullPath();
         char* className = op->Class->Name.GetName();
-        char* path = GetUninstancedPath(op);
-		char* packagename = op->GetPackageName().GetName();
-        int index = op->Name.Number;
-
-		logger.writeToLog(string_format("(%s) %s %s_%i\n", packagename, className, path, index), true);
+		logger.writeToLog(string_format("%s %s\n", className, fullInstancedPath), true);
     }
     ProcessEvent_orig(Context, Function, Parms, Result);
 }
