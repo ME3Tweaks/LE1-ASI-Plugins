@@ -593,6 +593,9 @@ public:
 	virtual void VirtualFunction72 ( );																			// 0x7FF7C668B670 (0x240)
 	virtual void VirtualFunction73 ( );																			// 0x7FF7C6621800 (0x248)
 	virtual void ProcessEvent ( class UFunction* pFunction, void* pParms, void* pResult = NULL );				// 0x7FF7C664DD20 (0x250)
+	virtual void VirtualFunction75();
+	virtual void VirtualFunction76();
+	virtual void ProcessRemoteFunction();
 };
 
 UClass* UObject::pClassPointer = NULL;

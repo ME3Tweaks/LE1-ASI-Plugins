@@ -14,6 +14,7 @@
     <ClCompile Include="UnrealscriptDebugger.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ScriptDebugLogger.h" />
     <ClInclude Include="UnrealScriptDefinitions.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
@@ -83,6 +84,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

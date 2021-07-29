@@ -154,6 +154,21 @@ struct FName
 		outName = nullptr;
 		return false;
 	}
+
+	char* Instanced()
+	{
+		if (Number > 0)
+		{
+			static char cOutBuffer[256];
+			sprintf_s(cOutBuffer, "%s_%d", GetName(), Number - 1);
+			return cOutBuffer;
+		}
+		else
+		{
+			return GetName();
+		}
+
+	}
 };
 
 struct FString : public TArray<wchar_t>  { 
@@ -187,7 +202,13 @@ struct FScriptDelegate
 { 
 	class UObject*		Object; 
 	struct FName		FunctionName; 
-}; 
+};
+
+struct FScriptInterface
+{
+	UObject* Object;
+	void* Interface;
+};
 
 /*
 # ========================================================================================= #
