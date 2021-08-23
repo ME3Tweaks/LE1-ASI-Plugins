@@ -50,14 +50,7 @@ SPI_IMPLEMENT_ATTACH
         SDKInitializer::Instance()->GetBioNamePools(),
         SDKInitializer::Instance()->GetObjects());
 
-    if (auto rc = InterfacePtr->FindPattern((void**)&ProcessEvent, "40 55 41 56 41 57 48 81 EC 90 00 00 00 48 8D 6C 24 20"); 
-        rc != SPIReturn::Success)
-    {
-        writeln(L"Attach - failed to find ProcessEvent pattern: %d / %s", rc, SPIReturnToString(rc));
-        return false;
-    }
-
-
+    INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
     if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig); 
         rc != SPIReturn::Success)
     {
