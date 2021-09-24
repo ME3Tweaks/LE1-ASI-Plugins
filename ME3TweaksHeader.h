@@ -160,7 +160,7 @@ public:
 	}
 
 	/// <summary>
-	/// Writes to both the console and the log file.
+	/// Writes to the log file.
 	/// </summary>
 	/// <param name="str"></param>
 	/// <param name="bTimeStamp"></param>
@@ -185,6 +185,11 @@ public:
 		}
 	}
 
+	void writeWideToLog(std::wstring_view wstr) {
+		fwprintf(log, L"%s", wstr.data());
+		fflush(log);
+	}
+	
 	void writeWideLineToLog(std::wstring_view wstr) {
 		fwprintf(log, L"%s\n", wstr.data());
 		fflush(log);
