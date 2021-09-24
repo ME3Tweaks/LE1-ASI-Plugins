@@ -31,12 +31,14 @@ tProcessEvent ProcessEvent_orig = nullptr;
 size_t MaxMemoryHit = 0;
 bool DrawSLH = true;
 bool CanToggleDrawSLH = false;
-
+char lastTouchedTriggerStream[512];
+float textScale = 1.0f;
+float lineHeight = 12.0f;
 static void RenderTextSLH(std::wstring msg, const float x, const float y, const char r, const char g, const char b, const float alpha, UCanvas* can)
 {
 	can->SetDrawColor(r, g, b, alpha * 255);
 	can->SetPos(x, y + 64); //+ is Y start. To prevent overlay on top of the power bar thing
-	can->DrawTextW(FString{ const_cast<wchar_t*>(msg.c_str()) }, 1, 0.8f, 0.8f, nullptr);
+	can->DrawTextW(FString{ const_cast<wchar_t*>(msg.c_str()) }, 1, textScale, textScale, nullptr);
 }
 
 const char* FormatBytes(size_t bytes, char* keepInStackStr)
@@ -56,10 +58,46 @@ const char* FormatBytes(size_t bytes, char* keepInStackStr)
 int line = 0;
 PROCESS_MEMORY_COUNTERS pmc;
 
+void SetTextScale()
+{
+	HWND activeWindow = FindWindowA(NULL, "Mass Effect");
+	if (activeWindow)
+	{
+		RECT rcOwner;
+		if (GetWindowRect(activeWindow, &rcOwner))
+		{
+			long width = rcOwner.right - rcOwner.left;
+			long height = rcOwner.bottom - rcOwner.top;
+
+			if (width > 2560 && height > 1440)
+			{
+				textScale = 2.0f;
+			}
+			else if (width > 1920 && height > 1080)
+			{
+				textScale = 1.5f;
+			} else
+			{
+				textScale = 1.0f;
+			}
+			lineHeight = 12.0f * textScale;
+		}
+	}
+}
 
 void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
-	if (!strcmp(Function->GetFullName(), "Function SFXGame.BioHUD.PostRender"))
+	auto funcFullName = Function->GetFullName();
+	if (!strcmp(funcFullName, "Function SFXGame.BioTriggerStream.Touch"))
+	{
+		auto rparms = reinterpret_cast<ABioTriggerStream_eventTouch_Parms*>(Parms);
+		if (rparms->Other->IsA(ASFXPawn_Player::StaticClass()))
+		{
+			auto bts = reinterpret_cast<ABioTriggerStream*>(Context);
+			strcpy(lastTouchedTriggerStream, bts->GetFullPath());
+		}
+	}
+	else if (!strcmp(funcFullName, "Function SFXGame.BioHUD.PostRender"))
 	{
 		line = 0;
 		auto hud = reinterpret_cast<ABioHUD*>(Context);
@@ -93,7 +131,7 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 				{
 					wchar_t objectName[512];
 					swprintf_s(objectName, 512, L"Memory usage: %S (%llu bytes)", FormatBytes(pmc.PagefileUsage, str), pmc.PagefileUsage);
-					RenderTextSLH(objectName, 5.0f, line * 12.0f, r, g, 0, alpha, hud->Canvas);
+					RenderTextSLH(objectName, 5.0f, line * lineHeight, r, g, 0, alpha, hud->Canvas);
 				}
 				line++;
 
@@ -106,18 +144,25 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 				if (DrawSLH) {
 					wchar_t objectName[512];
 					swprintf_s(objectName, 512, L"Max memory hit: %S (%llu bytes)", FormatBytes(MaxMemoryHit, str), MaxMemoryHit);
-					RenderTextSLH(objectName, 5.0f, line * 12.0f, r, g, 0, alpha, hud->Canvas);
+					RenderTextSLH(objectName, 5.0f, line * lineHeight, r, g, 0, alpha, hud->Canvas);
 				}
 
 				line++;
 			}
-			
+
 			if (DrawSLH && hud->WorldInfo)
 			{
+				SetTextScale();
+				int yIndex = 3; //Start at line 3 (starting at 0)
+
 				//screenLogger->ClearMessages();
 				//logger.writeToConsoleOnly(string_format("Number of streaming levels: %d\n", hud->WorldInfo->StreamingLevels.Count), true);
+				wchar_t lastHit[600];
+				swprintf_s(lastHit, 600, L"Last BioTriggerStream: %hs", lastTouchedTriggerStream);
+				RenderTextSLH(lastHit, 5, yIndex * lineHeight, 0, 255, 64, 1.0f, hud->Canvas);
+				yIndex++;
+				
 				if (hud->WorldInfo->StreamingLevels.Any()) {
-					int yIndex = 3; //Start at line 3 (starting at 0)
 					for (int i = 0; i < hud->WorldInfo->StreamingLevels.Count; i++) {
 						std::wstringstream ss;
 						ULevelStreaming* sl = hud->WorldInfo->StreamingLevels.Data[i];
@@ -167,7 +212,7 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 								b = 0;
 							}
 							const std::wstring msg = ss.str();
-							RenderTextSLH(msg, 5, yIndex * 12.0f, r, g, b, 1.0f, hud->Canvas);
+							RenderTextSLH(msg, 5, yIndex * lineHeight, r, g, b, 1.0f, hud->Canvas);
 							yIndex++;
 						}
 					}
@@ -187,19 +232,19 @@ SPI_IMPLEMENT_ATTACH
 	//Common::OpenConsole();
 
 	auto _ = SDKInitializer::Instance();
-	//writeln(L"Attach - names at 0x%p, objects at 0x%p",
-	//	SDKInitializer::Instance()->GetBioNamePools(),
-	//	SDKInitializer::Instance()->GetObjects());
+//writeln(L"Attach - names at 0x%p, objects at 0x%p",
+//	SDKInitializer::Instance()->GetBioNamePools(),
+//	SDKInitializer::Instance()->GetObjects());
 
-	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
-	if (auto rc = InterfacePtr->InstallHook(SLHHOOK "ProcessEvent", ProcessEvent, biohud_hook, (void**)&ProcessEvent_orig);
-		rc != SPIReturn::Success)
-	{
-		//writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
+INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+if (auto rc = InterfacePtr->InstallHook(SLHHOOK "ProcessEvent", ProcessEvent, biohud_hook, (void**)&ProcessEvent_orig);
+	rc != SPIReturn::Success)
+{
+	//writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
+	return false;
+}
 
-	return true;
+return true;
 }
 
 SPI_IMPLEMENT_DETACH
