@@ -7,23 +7,21 @@
 #include "../ME3TweaksHeader.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"SelfDebugger", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1 | SPI_GAME_LE2 | SPI_GAME_LE3, SPI_VERSION_ANY);
-SPI_PLUGINSIDE_POSTLOAD;
-SPI_PLUGINSIDE_ASYNCATTACH;
+SPI_PLUGINSIDE_PRELOAD;
+SPI_PLUGINSIDE_SEQATTACH;
 
-//ME3TweaksASILogger logger("Self Debugger v1", "SelfDebuggerLog.txt");
+ME3TweaksASILogger logger("Self Debugger v1", "SelfDebuggerLog.txt");
 
 // Original Func
-VOID(WINAPI* _OutputDebugStringW)(__in_z_opt LPCWSTR lpcszString) = OutputDebugStringW;
-typedef void (*tOutputDebugStringW)(__in_z_opt LPCWSTR lpcszString);
-tOutputDebugStringW OutputDebugStringW_Orig = OutputDebugStringW;
+typedef void (WINAPI * tOutputDebugStringW)(LPCWSTR lpcszString);
+tOutputDebugStringW OutputDebugStringW_Orig = nullptr;
 
 // Our replacement
-VOID WINAPI OutputDebugStringHook(__in_z_opt LPCWSTR lpcszString)
+void WINAPI OutputDebugStringW_Hook(LPCWSTR lpcszString)
 {
-	// do something with the string, like write to file
-    //cout << lpcszString;
-    //cout << "\n";
-	//writeln(lpcszString);
+    OutputDebugStringW_Orig(lpcszString);
+    writeln(L"%s", lpcszString);
+    logger.writeWideLineToLog(std::wstring_view{ lpcszString });
 }
 
 SPI_IMPLEMENT_ATTACH
@@ -31,7 +29,8 @@ SPI_IMPLEMENT_ATTACH
     Common::OpenConsole();
 	writeln(L"Initializing selfdebugger...");
 
-    if (auto rc = InterfacePtr->InstallHook("OutputDebugStringW", OutputDebugStringW_Orig, OutputDebugStringHook, (void**)OutputDebugStringW); rc != SPIReturn::Success)
+    if (auto rc = InterfacePtr->InstallHook("OutputDebugStringW", (void*)OutputDebugStringW, (void*)OutputDebugStringW_Hook, (void**)&OutputDebugStringW_Orig);
+        rc != SPIReturn::Success)
     {
         writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
         return false;
