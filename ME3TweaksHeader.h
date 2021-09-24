@@ -185,6 +185,11 @@ public:
 		}
 	}
 
+	void writeWideLineToLog(std::wstring_view wstr) {
+		fwprintf(log, L"%s\n", wstr.data());
+		fflush(log);
+	}
+
 	void flush() {
 		if (log) {
 			fflush(log);
