@@ -99,7 +99,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
         writeln(L"SeqAct_Log: %s", msg.c_str());
         if(msg.size() > 0)
         {
-            logger.writeToLog(msg.c_str(), true, true);
+            logger.writeToLog(msg, true, true);
             screenLogger.LogMessage(msg);
         }
     }
@@ -133,6 +133,7 @@ SPI_IMPLEMENT_ATTACH
 
 SPI_IMPLEMENT_DETACH
 {
+    logger.flush();
     Common::CloseConsole();
     return true;
 }
