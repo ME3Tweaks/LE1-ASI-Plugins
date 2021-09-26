@@ -179,6 +179,7 @@ public:
 			fprintf(log, "\n");
 		}
 
+		numLinesWritten++;
 		if (numLinesWritten > 10) {
 			fflush(log);
 			numLinesWritten = 0;
