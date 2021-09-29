@@ -29,7 +29,7 @@ struct OutParmInfo
 	OutParmInfo* Next;
 };
 
-struct LE1FFrame 
+struct LE1FFrame
 {
 	void* vtable;
 	int unks[3];
@@ -60,7 +60,7 @@ unsigned ExecHandler_hook(UEngine* Context, wchar_t* cmd, void* unk)
 	{
 		return TRUE;
 	}
-	if(IsCmd(&cmd, L"DEBUGSCRIPT"))
+	if (IsCmd(&cmd, L"DEBUGSCRIPT"))
 	{
 		const auto seps = L" \t";
 		wchar_t* context = nullptr;
@@ -76,7 +76,7 @@ unsigned ExecHandler_hook(UEngine* Context, wchar_t* cmd, void* unk)
 		StrCat(logPath, L"\\");
 		StrCat(logPath, token);
 		StrCat(logPath, L".log");
-		
+
 		logger.Open(logPath);
 
 		//todo: additional params to restrict it to when executing on a specific object? log multiple calls?
@@ -109,10 +109,26 @@ void CallFunction_hook(UObject* Context, LE1FFrame* Stack, void* Result, UFuncti
 }
 
 #define SCRIPTOBJECTFULLPATH(objPtr) (objPtr ? objPtr->GetFullPath() : "None")
+#define PRINTALLELEMENTS(type, printStmnt) auto value = *reinterpret_cast<type*>(propAddr); \
+											if (prop->ArrayDim > 1) \
+											{ \
+												logger.out() << "[" << prop->ArrayDim << "] : [" << printStmnt; \
+												for (int i = prop->ArrayDim - 1; i > 0; --i) \
+												{ \
+													propAddr += prop->ElementSize; \
+													value = *reinterpret_cast<type*>(propAddr); \
+													logger.out() << ", " << printStmnt; \
+												} \
+												logger.out() << "]\n"; \
+											} \
+											else \
+											{ \
+												logger.out() << ": " << printStmnt << "\n"; \
+											} \
 
 void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* outParmInfo = nullptr)
 {
-	void* propAddr;
+	BYTE* propAddr;
 	logger.IncreaseIndent();
 	for (auto curChild = node->Children; curChild; curChild = curChild->Next)
 	{
@@ -134,72 +150,157 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		{
 			propAddr = propsOffset + prop->Offset;
 		}
-		
-		const auto propClass = prop->Class;
-		const auto propName = prop->GetName();
 
+		auto propClass = prop->Class;
+
+		logger.indent() << prop->GetName();
 		if (propClass == UIntProperty::StaticClass())
 		{
-			auto value = *static_cast<int*>(propAddr);
-			logger.indent() << propName << ": " << value << "\n";
+			PRINTALLELEMENTS(int, value)
 		}
 		else if (propClass == UFloatProperty::StaticClass())
 		{
-			auto value = *static_cast<float*>(propAddr);
-			logger.indent() << propName << ": " << value << "\n";
+			PRINTALLELEMENTS(float, value)
 		}
 		else if (propClass == UByteProperty::StaticClass())
 		{
-			auto value = *static_cast<BYTE*>(propAddr);
-			logger.indent() << propName << ": " << static_cast<int>(value) << "\n";
+			PRINTALLELEMENTS(BYTE, static_cast<int>(value))
 		}
 		else if (propClass == UBoolProperty::StaticClass())
 		{
-			auto value = *static_cast<unsigned*>(propAddr);
-			logger.indent() << propName << ": " << (value ? "True" : "False") << "\n";
+			PRINTALLELEMENTS(unsigned, (value ? "True" : "False"))
 		}
 		else if (propClass == UNameProperty::StaticClass())
 		{
-			auto value = *static_cast<FName*>(propAddr);
-			logger.indent() << propName << ": " << value.Instanced() << "\n";
+			PRINTALLELEMENTS(FName, value.Instanced())
 		}
 		else if (propClass == UStrProperty::StaticClass())
 		{
-			auto value = *static_cast<FString*>(propAddr);
-			logger.indent() << propName << ": " << value.Data << "\n";
+			PRINTALLELEMENTS(FString, value.Data)
 		}
 		else if (propClass == UStringRefProperty::StaticClass())
 		{
-			auto value = *static_cast<int*>(propAddr);
-			logger.indent() << propName << ": $" << value << "\n";
+			PRINTALLELEMENTS(int, "$" << value)
 		}
 		else if (propClass == UArrayProperty::StaticClass())
 		{
-			auto value = *static_cast<TArray<BYTE>*>(propAddr);
-			logger.indent() << propName << ": " << value.Count << " Elements \n"; //todo: print the elements
+			auto array = *reinterpret_cast<TArray<BYTE>*>(propAddr);
+			auto array_property = static_cast<UArrayProperty*>(prop);
+			prop = array_property->Inner;
+			propClass = prop->Class;
+			logger.indent() << ": " << array.Count << " Elements ";
+			logger.out() << "[";
+			if (propClass == UStructProperty::StaticClass())
+			{
+				auto uStruct = static_cast<UStructProperty*>(prop)->Struct;
+				logger.out() << " : ( StructType: " << uStruct->GetName() << ") [\n";
+				PrintPropertyValues(propAddr, uStruct);
+				for (int i = 0; i < array.Num(); ++i)
+				{
+					logger.indent() << ",\n";
+					propAddr += prop->ElementSize;
+					PrintPropertyValues(propAddr, uStruct);
+				}
+				logger.indent() << "]\n";
+			}
+			else
+			{
+				for (int i = 0; i < array.Num(); ++i)
+				{
+					if (i > 0)
+					{
+						logger.out() << ", ";
+					}
+					if (propClass == UIntProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<int*>(propAddr);
+						logger.out() << value;
+					}
+					else if (propClass == UFloatProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<float*>(propAddr);
+						logger.out() << value;
+					}
+					else if (propClass == UByteProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<BYTE*>(propAddr);
+						logger.out() << static_cast<int>(value);
+					}
+					else if (propClass == UBoolProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<unsigned*>(propAddr);
+						logger.out() << (value ? "True" : "False");
+					}
+					else if (propClass == UNameProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<FName*>(propAddr);
+						logger.out() << value.Instanced();
+					}
+					else if (propClass == UStrProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<FString*>(propAddr);
+						logger.out() << value.Data;
+					}
+					else if (propClass == UStringRefProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<int*>(propAddr);
+						logger.out() << "$" << value;
+					}
+					else if (propClass == UDelegateProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<FScriptDelegate*>(propAddr);
+						logger.out() << "(Function Name:" << value.FunctionName.Instanced() << ", Object: " << SCRIPTOBJECTFULLPATH(value.Object) << ")";
+					}
+					else if (propClass == UInterfaceProperty::StaticClass())
+					{
+						auto value = *reinterpret_cast<FScriptInterface*>(propAddr);
+						logger.out() << SCRIPTOBJECTFULLPATH(value.Object);
+					}
+					else if (IsA<UObjectProperty>(prop))
+					{
+						auto value = *reinterpret_cast<UObject**>(propAddr);
+						logger.out() << SCRIPTOBJECTFULLPATH(value);
+					}
+					propAddr += prop->ElementSize;
+				}
+				logger.out() << "]\n";
+			}
 		}
 		else if (propClass == UDelegateProperty::StaticClass())
 		{
-			auto value = *static_cast<FScriptDelegate*>(propAddr);
-			logger.indent() << propName << ": (Function Name:" << value.FunctionName.Instanced() << ", Object: " << SCRIPTOBJECTFULLPATH(value.Object) << ")\n";
+			PRINTALLELEMENTS(FScriptDelegate, "(Function Name : " << value.FunctionName.Instanced() << ", Object : " << SCRIPTOBJECTFULLPATH(value.Object) << ")")
 		}
 		else if (propClass == UInterfaceProperty::StaticClass())
 		{
-			auto value = *static_cast<FScriptInterface*>(propAddr);
-			logger.indent() << propName << ": " << SCRIPTOBJECTFULLPATH(value.Object) << "\n";
+			PRINTALLELEMENTS(FScriptInterface, SCRIPTOBJECTFULLPATH(value.Object))
 		}
 		else if (propClass == UStructProperty::StaticClass())
 		{
 			auto uStruct = static_cast<UStructProperty*>(prop)->Struct;
-			logger.indent() << propName << ": ( StructType: " << uStruct->GetName() << ")\n";
-			PrintPropertyValues(static_cast<BYTE*>(propAddr), uStruct);
+			auto value = *reinterpret_cast<UStructProperty*>(propAddr);
+			if (prop->ArrayDim > 1)
+			{
+				logger.out() << "[" << prop->ArrayDim << "] : ( StructType: " << uStruct->GetName() << ") [\n";
+				PrintPropertyValues(propAddr, uStruct);
+				for (int i = prop->ArrayDim - 1; i > 0; --i)
+				{
+					logger.indent() << ",\n";
+					propAddr += prop->ElementSize;
+					PrintPropertyValues(propAddr, uStruct);
+				}
+				logger.indent() << "]\n";
+			}
+			else
+			{
+				logger.out() << "( StructType: " << uStruct->GetName() << ")\n";
+				PrintPropertyValues(propAddr, uStruct);
+			}
 		}
 		else if (IsA<UObjectProperty>(prop))
 		{
-			auto value = *static_cast<UObject**>(propAddr);
-			logger.indent() << propName << ": " << SCRIPTOBJECTFULLPATH(value) << "\n";
+			PRINTALLELEMENTS(UObject*, SCRIPTOBJECTFULLPATH(value))
 		}
-		
+
 	}
 	logger.DecreaseIndent();
 }
@@ -251,7 +352,7 @@ bool PatchMemory(const void* patch, const SIZE_T patchSize)
 	return true;
 }
 
-bool PatchExecutionLoop() 
+bool PatchExecutionLoop()
 {
 
 	BYTE patch[] = { 0x4c, 0x8d, 0x0d, 0x5c, 0xf2, 0x5a, 0x01, //LEA R9, [GNatives] //load the address of the native function array into the 4th argument register
@@ -309,7 +410,7 @@ void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
 	bool removePatch = false;
 	//logger << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
 
-	if (!_strcmpi(node->GetFullPath(), debugFuncFullPath)) 
+	if (!_strcmpi(node->GetFullPath(), debugFuncFullPath))
 	{
 		debugFunc = false;
 		PatchExecutionLoop();
@@ -329,9 +430,9 @@ void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
 SPI_IMPLEMENT_ATTACH
 {
 	//Common::OpenConsole();
-	
+
 	logger.Open(logPath);
-	
+
 	auto _ = SDKInitializer::Instance();
 	/*writeln(L"Attach - names at 0x%p, objects at 0x%p",
 		SDKInitializer::Instance()->GetBioNamePools(),
@@ -408,7 +509,7 @@ SPI_IMPLEMENT_DETACH
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID) {
-	if (reason == DLL_PROCESS_ATTACH) 
+	if (reason == DLL_PROCESS_ATTACH)
 	{
 		GetModuleFileName(hModule, logPath, MAX_PATH);
 	}

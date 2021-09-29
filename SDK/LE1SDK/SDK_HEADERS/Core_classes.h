@@ -524,7 +524,7 @@ public:
 	virtual void VirtualFunction03 ( );																			// 0x7FF7C6584690 (0x18)
 	virtual void VirtualFunction04 ( );																			// 0x7FF7C6686A70 (0x20)
 	virtual void VirtualFunction05 ( );																			// 0x7FF7C668A060 (0x28)
-	virtual void VirtualFunction06 ( );																			// 0x7FF7C662A4B0 (0x30)
+	virtual void PostLoad          ( );																			// 0x7FF7C662A4B0 (0x30)
 	virtual void VirtualFunction07 ( );																			// 0x7FF7C667D840 (0x38)
 	virtual void VirtualFunction08 ( );																			// 0x7FF7C6687020 (0x40)
 	virtual void VirtualFunction09 ( );																			// 0x7FF7C6584690 (0x48)
