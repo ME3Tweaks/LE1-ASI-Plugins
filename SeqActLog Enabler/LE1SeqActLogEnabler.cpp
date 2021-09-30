@@ -200,6 +200,7 @@ SPI_IMPLEMENT_ATTACH
 
 SPI_IMPLEMENT_DETACH
 {
-	Common::CloseConsole();
-	return true;
+    logger.flush();
+    Common::CloseConsole();
+    return true;
 }

@@ -73,6 +73,10 @@ public:
 		return this->Count > 0;
 	}
 
+	/// <summary>
+	/// Do not use this on TArrays you don't create yourself, as the Unreal allocator won't work with them.
+	/// </summary>
+	/// <param name="InputData"></param>
 	void Add ( T InputData ) 
 	{
 		if (Count >= Max)
@@ -208,6 +212,21 @@ struct FScriptInterface
 {
 	UObject* Object;
 	void* Interface;
+};
+
+struct FObjectResource
+{
+	struct FName ObjectName;
+	int	OuterIndex;
+};
+
+struct FObjectImport : public FObjectResource
+{
+	struct FName ClassPackage;
+	struct FName ClassName;
+	class UObject* Object;
+	class ULinkerLoad* SourceLinker;
+	int SourceIndex;
 };
 
 /*

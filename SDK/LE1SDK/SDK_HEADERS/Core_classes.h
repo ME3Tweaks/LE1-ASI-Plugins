@@ -524,7 +524,7 @@ public:
 	virtual void VirtualFunction03 ( );																			// 0x7FF7C6584690 (0x18)
 	virtual void VirtualFunction04 ( );																			// 0x7FF7C6686A70 (0x20)
 	virtual void VirtualFunction05 ( );																			// 0x7FF7C668A060 (0x28)
-	virtual void VirtualFunction06 ( );																			// 0x7FF7C662A4B0 (0x30)
+	virtual void PostLoad          ( );																			// 0x7FF7C662A4B0 (0x30)
 	virtual void VirtualFunction07 ( );																			// 0x7FF7C667D840 (0x38)
 	virtual void VirtualFunction08 ( );																			// 0x7FF7C6687020 (0x40)
 	virtual void VirtualFunction09 ( );																			// 0x7FF7C6584690 (0x48)
@@ -784,7 +784,13 @@ UClass* UMetaData::pClassPointer = NULL;
 class ULinker : public UObject
 {
 public:
-	unsigned char                                      UnknownData00[ 0x14C ];                           		// 0x0060 (0x014C) MISSED OFFSET
+	class UPackage*                                    LinkerRoot;                                              // 0x0060 (0x0008)
+	unsigned char                                      UnknownData00[ 0xA4 ];                           		// 0x0068 (0x00A4) MISSED OFFSET
+	struct TArray<FName>                               NameMap;                                                 // 0x011C (0x0010)
+	struct TArray<FObjectImport>                       ImportMap;                                               // 0x011C (0x0010)
+	unsigned char                                      UnknownData01[ 0x68 ];                           		// 0x012C (0x0068) MISSED OFFSET
+	struct FString                                     Filename;                                                // 0x0194 (0x0010)
+	unsigned char                                      UnknownData02[0x8];                           		    // 0x01A4 (0x0008) MISSED OFFSET
 
 private:
 	static UClass* pClassPointer;
