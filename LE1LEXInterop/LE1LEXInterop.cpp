@@ -23,6 +23,9 @@ SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
 TCHAR SplashPath[MAX_PATH];
+HANDLE hPipe;
+LPOVERLAPPED pipeOverlap;
+bool playerGPSActive;
 
 char* GetUObjectClassName(UObject* object)
 {
@@ -158,6 +161,26 @@ void SendMessageToLEX(USequenceOp* op)
 	}
 }
 
+void SendStringToLEX(wstring wstr) {
+	WriteToMsgBuffer(wstr, true);
+	msgBuffer[writePos] = 0;
+	writePos++;
+	auto handle = FindWindow(nullptr, L"Legendary Explorer");
+	if (handle)
+	{
+		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
+		ME3ExpMsg msg;
+		const auto len = writePos - (msgPtr - msgBuffer);
+		wcsncpy_s(msg.msg, msgPtr, len);
+		COPYDATASTRUCT cds;
+		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
+		cds.dwData = SENT_FROM_LE1;
+		cds.cbData = sizeof(msg);
+		cds.lpData = &msg;
+		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
+	}
+}
+
 TArray<UObject*> Actors;
 
 void DumpActors(USequenceOp* const op)
@@ -205,7 +228,7 @@ void DumpActors(USequenceOp* const op)
 			continue;
 		}
 		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data,  L"Length", 7) && IsA<USeqVar_Int>(seqVar))
+		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Length", 7) && IsA<USeqVar_Int>(seqVar))
 		{
 			const auto lenVar = static_cast<USeqVar_Int*>(seqVar);
 			lenVar->IntValue = Actors.Count;
@@ -296,75 +319,137 @@ tProcessEvent ProcessEvent = nullptr;
 tProcessEvent ProcessEvent_orig = nullptr;
 void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
-    const auto className = Context->Class->Name.GetName();
-    if(!strcmp(className, "SeqAct_SendMessageToLEX"))
-    {
-        if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-        {
-            const auto op = static_cast<USequenceOp*>(Context);
-            SendMessageToLEX(op);
-        }
-    }
-    else if(!strcmp(className, "SeqAct_LEXDumpActors"))
-    {
-        if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-        {
-            const auto op = static_cast<USequenceOp*>(Context);
-            DumpActors(op);
-        }
-    }
-    else if(!strcmp(className, "SeqAct_LEXAccessDumpedActorsList"))
-    {
-        if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-        {
-            const auto op = static_cast<USequenceOp*>(Context);
-            AccessDumpedActorsList(op);
-        }
-    }
-    else if(!strcmp(className, "SeqAct_LEXGetPlayerCamPOV"))
-    {
-        if(!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-        {
-            const auto op = static_cast<USequenceOp*>(Context);
-            GetCamPOV(op);
-        }
-    }
+	const auto className = Context->Class->Name.GetName();
+	if (!strcmp(className, "SeqAct_SendMessageToLEX"))
+	{
+		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		{
+			const auto op = static_cast<USequenceOp*>(Context);
+			SendMessageToLEX(op);
+		}
+	}
+	else if (!strcmp(className, "SeqAct_LEXDumpActors"))
+	{
+		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		{
+			const auto op = static_cast<USequenceOp*>(Context);
+			DumpActors(op);
+		}
+	}
+	else if (!strcmp(className, "SeqAct_LEXAccessDumpedActorsList"))
+	{
+		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		{
+			const auto op = static_cast<USequenceOp*>(Context);
+			AccessDumpedActorsList(op);
+		}
+	}
+	else if (!strcmp(className, "SeqAct_LEXGetPlayerCamPOV"))
+	{
+		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		{
+			const auto op = static_cast<USequenceOp*>(Context);
+			GetCamPOV(op);
+		}
+	}
 	else if (IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
 	{
 		const auto playerController = static_cast<ABioPlayerController*>(Context);
 		cachedPOV = playerController->PlayerCamera->CameraCache.POV;
+
+		if (hPipe != NULL && playerGPSActive && playerController->Pawn != nullptr)
+		{
+			// What happens when you don't have an interpolation method
+			std::wstringstream ss;
+			ss << "PLAYERLOC=" << playerController->Pawn->Location.X << "," << playerController->Pawn->Location.Y << "," << playerController->Pawn->Location.Z;
+			SendStringToLEX(ss.str());
+
+			std::wstringstream ss2;
+			ss2 << "PLAYERROT=" << playerController->Pawn->Rotation.Pitch << "," << playerController->Pawn->Rotation.Yaw << "," << playerController->Pawn->Rotation.Roll;
+			SendStringToLEX(ss2.str());
+
+		}
 	}
-    ProcessEvent_orig(Context, Function, Parms, Result);
+	ProcessEvent_orig(Context, Function, Parms, Result);
 }
 
+
+void ProcessCommand(char str[1024], DWORD dword)
+{
+	writeln("Received command:");
+	printf(str);
+	if (strcmp(str, "ACTIVATE_PLAYERGPS\r\n") == 0)
+	{
+		playerGPSActive = true;
+	}
+	else if (strcmp(str, "DEACTIVATE_PLAYERGPS\r\n") == 0)
+	{
+		playerGPSActive = false;
+	}
+}
 
 
 SPI_IMPLEMENT_ATTACH
 {
-    Common::OpenConsole();
+	Common::OpenConsole();
 
-    auto _ = SDKInitializer::Instance();
+	auto _ = SDKInitializer::Instance();
 
-    INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
 
-    if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig); 
-        rc != SPIReturn::Success)
-    {
-        writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
-        return false;
-    }
+	if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig);
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
 
-    return true;
+	// MGAMERZ PIPIN'
+	char buffer[1024];
+	DWORD dwRead;
+
+
+	hPipe = CreateNamedPipe(TEXT("\\\\.\\pipe\\LEX_LE1_COMM_PIPE"),
+		PIPE_ACCESS_DUPLEX,
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
+		1,
+		1024 * 16,
+		1024 * 16,
+		NMPWAIT_USE_DEFAULT_WAIT,
+		NULL);
+
+	if (hPipe != nullptr)
+		writeln("PIPED UP");
+	else
+		writeln("COULD NOT CREATE INTEROP PIPE");
+
+	while (hPipe != INVALID_HANDLE_VALUE)
+	{
+		if (ConnectNamedPipe(hPipe, NULL) != FALSE)   // wait for someone to connect to the pipe
+		{
+			while (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &dwRead, NULL) != FALSE)
+			{
+				/* add terminating zero */
+				buffer[dwRead] = '\0';
+				ProcessCommand(buffer, dwRead);
+			}
+		}
+
+		//writeln("FLUSHING THE PIPES AWAY");
+		DisconnectNamedPipe(hPipe);
+	}
+
+	return true;
 }
 
 SPI_IMPLEMENT_DETACH
 {
-    Common::CloseConsole();
-    return true;
+	Common::CloseConsole();
+	return true;
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID) {
-	if (reason == DLL_PROCESS_ATTACH) 
+	if (reason == DLL_PROCESS_ATTACH)
 	{
 		GetModuleFileName(hModule, SplashPath, MAX_PATH);
 		PathRemoveFileSpec(SplashPath);
