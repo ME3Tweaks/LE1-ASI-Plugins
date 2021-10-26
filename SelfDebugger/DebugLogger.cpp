@@ -36,8 +36,8 @@ UObject* CreateImport_hook(ULinkerLoad* Context, int i)
     if (object == nullptr)
     {
         FObjectImport importEntry = Context->ImportMap(i);
-        writeln("Could not resolve #%d: %hs in file: %s", -i - 1, importEntry.ObjectName.GetName(), Context->Filename.Data);
-        logger.writeWideLineToLog(wstring_format(L"Could not resolve #%d: %hs in file: %s", -i - 1, importEntry.ObjectName.GetName(), Context->Filename.Data));
+        writeln("Could not resolve #%d: %hs (%hs) in file: %s", -i - 1, importEntry.ObjectName.GetName(), importEntry.ClassName.GetName(), Context->Filename.Data);
+        logger.writeWideLineToLog(wstring_format(L"Could not resolve #%d: %hs (%hs) in file: %s", -i - 1, importEntry.ObjectName.GetName(), importEntry.ClassName.GetName(), Context->Filename.Data));
         logger.flush();
     }
     return object;
