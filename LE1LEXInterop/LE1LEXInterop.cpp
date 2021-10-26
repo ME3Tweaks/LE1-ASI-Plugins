@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <ostream>
 #include <streambuf>
 #include <shlwapi.h>
@@ -26,6 +27,8 @@ TCHAR SplashPath[MAX_PATH];
 HANDLE hPipe;
 LPOVERLAPPED pipeOverlap;
 bool playerGPSActive;
+
+optional<std::wstring> pendingConsoleCommand;
 
 char* GetUObjectClassName(UObject* object)
 {
@@ -357,6 +360,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 		const auto playerController = static_cast<ABioPlayerController*>(Context);
 		cachedPOV = playerController->PlayerCamera->CameraCache.POV;
 
+		// PLAYER GPS
 		if (hPipe != NULL && playerGPSActive && playerController->Pawn != nullptr)
 		{
 			// What happens when you don't have an interpolation method
@@ -367,17 +371,40 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 			std::wstringstream ss2;
 			ss2 << "PLAYERROT=" << playerController->Pawn->Rotation.Pitch << "," << playerController->Pawn->Rotation.Yaw << "," << playerController->Pawn->Rotation.Roll;
 			SendStringToLEX(ss2.str());
+		}
 
+		if (pendingConsoleCommand.has_value())
+		{
+			auto str = pendingConsoleCommand.value().data();
+			playerController->ConsoleCommand(str, 0);
+			//writeln("Ran CE!");
+			pendingConsoleCommand.reset(); // Clear
 		}
 	}
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
 
+bool startsWith(const char* pre, const char* str)
+{
+	size_t lenpre = strlen(pre),
+		lenstr = strlen(str);
+	return lenstr < lenpre ? false : memcmp(pre, str, lenpre) == 0;
+}
+
+char* substr(char* arr, int begin, int len)
+{
+	char* res = new char[len + 1];
+	for (int i = 0; i < len; i++)
+		res[i] = *(arr + begin + i);
+	res[len] = 0;
+	return res;
+}
 
 void ProcessCommand(char str[1024], DWORD dword)
 {
 	writeln("Received command:");
 	printf(str);
+	printf("\n");
 	if (strcmp(str, "ACTIVATE_PLAYERGPS\r\n") == 0)
 	{
 		playerGPSActive = true;
@@ -385,6 +412,31 @@ void ProcessCommand(char str[1024], DWORD dword)
 	else if (strcmp(str, "DEACTIVATE_PLAYERGPS\r\n") == 0)
 	{
 		playerGPSActive = false;
+	}
+	else if (startsWith("CAUSEEVENT ", str))
+	{
+		auto eventName = substr(str, 11, strlen(str) - 13); // +2 for \r\n
+		printf(eventName);
+		auto bioWorldInfo = reinterpret_cast<ABioWorldInfo*>(FindObjectOfType(ABioWorldInfo::StaticClass()));
+		if (bioWorldInfo)
+		{
+			FName foundName;
+			if (FName::TryFind(eventName, 0, &foundName))
+			{
+				auto localPlayerController = bioWorldInfo->GetLocalPlayerController();
+				if (localPlayerController) {
+					std::wstringstream ss;
+					ss << "ce " << eventName;
+					pendingConsoleCommand.emplace(ss.str());
+				}
+			} else
+			{
+				writeln("Name not found");
+			}
+		} else
+		{
+			writeln("No BioWorldInfo");
+		}
 	}
 }
 
