@@ -14,12 +14,12 @@
 
 #define MYHOOK "LE1SeqActLogEnabler_"
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"2.0.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"3.0.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
-ME3TweaksASILogger logger("SeqAct_Log Enabler v2", "SeqActLog.txt");
-ScreenLogger screenLogger(L"SeqAct_Log Enabler v2");
+ME3TweaksASILogger logger("SeqAct_Log Enabler v3", "SeqActLog.txt");
+ScreenLogger screenLogger(L"SeqAct_Log Enabler v3");
 
 std::wstringstream ss;
 
@@ -141,7 +141,6 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 		auto seqLog = reinterpret_cast<USeqAct_Log*>(Context);
 		auto numVarLinks = seqLog->VariableLinks.Count;
 
-		// Todo: Patch the function that removes m_aObjComment
 		if (seqLog->bOutputObjCommentToScreen == 1ul)
 		{
 			auto numLines = seqLog->m_aObjComment.Num();
