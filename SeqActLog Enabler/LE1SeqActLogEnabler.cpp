@@ -6,11 +6,10 @@
 #include <ostream>
 #include <streambuf>
 #include <sstream>
-#include "../Interface.h"
-#include "../Common.h"
-#include "../SDK/LE1SDK/SdkHeaders.h"
-#include "../ScreenLogger.h"
-#include "../ME3TweaksHeader.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/ME3TweaksHeader.h"
+#include "../LE1-SDK/ScreenLogger.h"
 
 #define MYHOOK "LE1SeqActLogEnabler_"
 

@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <cstdio>
+#include <TlHelp32.h>
 
 #pragma once
 

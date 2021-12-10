@@ -5,13 +5,13 @@
 #include <ostream>
 #include <streambuf>
 #include <sstream>
-#include "../Interface.h"
-#include "../Common.h"
-#include "../SDK/LE1SDK/SdkHeaders.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/SdkHeaders.h"
 
 #define SLHHOOK "LE1StreamingLevelsHUD_"
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1StreamingLevelsHUD", L"Mgamerz", L"2.0.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1StreamingLevelsHUD", L"Mgamerz", L"3.0.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
@@ -95,6 +95,17 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 		{
 			auto bts = reinterpret_cast<ABioTriggerStream*>(Context);
 			strcpy(lastTouchedTriggerStream, bts->GetFullPath());
+		}
+	}
+	else if (!strcmp(Function->Name.GetName(), "DrawHUD"))
+	{
+		writeln(L"Func: %hs", Function->GetFullName());
+		auto hud = reinterpret_cast<AHUD*>(Context);
+		if (hud != nullptr)
+		{
+			hud->Canvas->SetDrawColor(0, 0, 0, 255);
+			hud->Canvas->SetPos(0, 0);
+			hud->Canvas->DrawBox(1920, 1080);
 		}
 	}
 	else if (!strcmp(funcFullName, "Function SFXGame.BioHUD.PostRender"))

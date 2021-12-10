@@ -8,9 +8,9 @@
 #include <sstream>
 
 #include "ScriptDebugLogger.h"
-#include "../Interface.h"
-#include "../Common.h"
-#include "../ME3TweaksHeader.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/ME3TweaksHeader.h"
 #include "UnrealScriptDefinitions.h"
 #include "../ConsoleCommandParsing.h"
 #pragma comment(lib, "shlwapi.lib")

@@ -7,10 +7,9 @@
 #include <random>
 #include <streambuf>
 #include <sstream>
-#include "../Interface.h"
-#include "../Common.h"
-#include "../SDK/LE1SDK/SdkHeaders.h"
-#include "../ME3TweaksHeader.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/ME3TweaksHeader.h"
 
 #define MYHOOK "MExperiments_"
 

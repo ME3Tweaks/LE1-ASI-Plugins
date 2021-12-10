@@ -11,7 +11,7 @@
 #include <locale> 
 #include <codecvt>
 #ifndef _NOSDK
-#include "SDK/LE1SDK/SdkHeaders.h"
+#include "SdkHeaders.h"
 #endif
 
 

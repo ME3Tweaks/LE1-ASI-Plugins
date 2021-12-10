@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../Interface.h"
-#include "../Common.h"
-#include "../SDK/LE1SDK/SdkHeaders.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/SdkHeaders.h"
 
 /// <summary>
 /// Gets objects in memory of a specific class type. Returns a TArray with objects that can be casted to that type.

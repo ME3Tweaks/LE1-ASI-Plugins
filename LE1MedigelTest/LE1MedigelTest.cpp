@@ -1,6 +1,6 @@
-#include "../Interface.h"
-#include "../Common.h"
-#include "../SDK/LE1SDK/SdkHeaders.h"
+#include "../LE1-SDK/Interface.h"
+#include "../LE1-SDK/Common.h"
+#include "../LE1-SDK/SdkHeaders.h"
 
 
 #define MYHOOK "LE1MedigelTest_"

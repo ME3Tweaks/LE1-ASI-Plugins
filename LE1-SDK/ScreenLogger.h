@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "../SDK/LE1SDK/SdkHeaders.h"
+#include "../LE1-SDK/SdkHeaders.h"
 using namespace std;
 using BYTE = unsigned char;
 
