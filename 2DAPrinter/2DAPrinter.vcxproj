@@ -92,10 +92,6 @@
     <ClCompile Include="2DAPrinter.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common.h" />
-    <ClInclude Include="..\Interface.h" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\LE1-SDK\LE1-SDK.vcxproj">
       <Project>{e8071203-085e-4b90-9c5c-39d546ed6fe2}</Project>
     </ProjectReference>
