@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.31424.327
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1MedigelTest", "LE1MedigelTest\LE1MedigelTest.vcxproj", "{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1ASITemplate", "LE1ASITemplate\LE1ASITemplate.vcxproj", "{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SeqActLog Enabler", "SeqActLog Enabler\SeqActLog Enabler.vcxproj", "{663B2C5C-7EF5-44D8-B666-62D4DDFB9DA4}"
 EndProject
