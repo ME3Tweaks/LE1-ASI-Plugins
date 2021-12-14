@@ -16,8 +16,8 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 
 typedef void (*tProcessEvent)(UObject* Context, UFunction* Function, void* Parms, void* Result);
 tProcessEvent ProcessEvent = nullptr;
-
 tProcessEvent ProcessEvent_orig = nullptr;
+
 void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
     ProcessEvent_orig(Context, Function, Parms, Result);
@@ -30,15 +30,8 @@ SPI_IMPLEMENT_ATTACH
 
     auto _ = SDKInitializer::Instance();
 
-    if (auto rc = InterfacePtr->FindPattern((void**)&ProcessEvent, "40 55 41 56 41 57 48 81 EC 90 00 00 00 48 8D 6C 24 20"); 
-        rc != SPIReturn::Success)
-    {
-        writeln(L"Attach - failed to find ProcessEvent pattern: %d / %s", rc, SPIReturnToString(rc));
-        return false;
-    }
-
-
-    if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig); 
+    INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+    if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig);
         rc != SPIReturn::Success)
     {
         writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
