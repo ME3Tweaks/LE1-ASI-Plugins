@@ -162,6 +162,7 @@ SPI_IMPLEMENT_ATTACH
 		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
+	writeln("2DAPrinter: Press CTRL + 2 to dump all 2DAs in memory to log");
 	return true;
 }
 

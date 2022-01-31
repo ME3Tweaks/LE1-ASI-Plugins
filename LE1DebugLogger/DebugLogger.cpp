@@ -7,12 +7,11 @@
 #include "../LE1-SDK/ME3TweaksHeader.h"
 #define MYHOOK "DebugLogger_"
 
-SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1 | SPI_GAME_LE2 | SPI_GAME_LE3,
-	SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_PRELOAD;
 SPI_PLUGINSIDE_SEQATTACH;
 
-ME3TweaksASILogger logger("DebugLogger v1", "DebugLogger.txt");
+ME3TweaksASILogger logger("DebugLogger v2", "DebugLogger.txt");
 
 // Original Func
 typedef void (WINAPI* tOutputDebugStringW)(LPCWSTR lpcszString);

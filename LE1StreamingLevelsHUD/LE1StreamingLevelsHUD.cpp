@@ -76,7 +76,8 @@ void SetTextScale()
 			else if (width > 1920 && height > 1080)
 			{
 				textScale = 1.5f;
-			} else
+			}
+			else
 			{
 				textScale = 1.0f;
 			}
@@ -172,7 +173,7 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 				swprintf_s(lastHit, 600, L"Last BioTriggerStream: %hs", lastTouchedTriggerStream);
 				RenderTextSLH(lastHit, 5, yIndex * lineHeight, 0, 255, 64, 1.0f, hud->Canvas);
 				yIndex++;
-				
+
 				if (hud->WorldInfo->StreamingLevels.Any()) {
 					for (int i = 0; i < hud->WorldInfo->StreamingLevels.Count; i++) {
 						std::wstringstream ss;
@@ -243,19 +244,19 @@ SPI_IMPLEMENT_ATTACH
 	//Common::OpenConsole();
 
 	auto _ = SDKInitializer::Instance();
-//writeln(L"Attach - names at 0x%p, objects at 0x%p",
-//	SDKInitializer::Instance()->GetBioNamePools(),
-//	SDKInitializer::Instance()->GetObjects());
+	//writeln(L"Attach - names at 0x%p, objects at 0x%p",
+	//	SDKInitializer::Instance()->GetBioNamePools(),
+	//	SDKInitializer::Instance()->GetObjects());
 
-INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
-if (auto rc = InterfacePtr->InstallHook(SLHHOOK "ProcessEvent", ProcessEvent, biohud_hook, (void**)&ProcessEvent_orig);
-	rc != SPIReturn::Success)
-{
-	//writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
-	return false;
-}
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	if (auto rc = InterfacePtr->InstallHook(SLHHOOK "ProcessEvent", ProcessEvent, biohud_hook, (void**)&ProcessEvent_orig);
+		rc != SPIReturn::Success)
+	{
+		//writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
 
-return true;
+	return true;
 }
 
 SPI_IMPLEMENT_DETACH
