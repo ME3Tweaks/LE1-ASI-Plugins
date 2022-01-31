@@ -19,13 +19,15 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1LEXInterop", "LE1LEXInte
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FunctionLogger", "FunctionLogger\FunctionLogger.vcxproj", "{F5C37F91-930C-4037-B0A0-C8C352636899}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1DebugLogger", "LE1DebugLogger\LE1DebugLogger.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108197544}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DebugLogger", "LE1DebugLogger\LE1DebugLogger.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108197544}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MExperiments", "MExperiments\MExperiements.vcxproj", "{160E1D32-278C-410F-9734-DAAC56711EFF}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "2DAPrinter", "2DAPrinter\2DAPrinter.vcxproj", "{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE4}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1-SDK", "LE1-SDK\LE1-SDK.vcxproj", "{E8071203-085E-4B90-9C5C-39D546ED6FE2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PNGScreenShots", "PNGScreenshots\PNGScreenshots.vcxproj", "{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -113,6 +115,12 @@ Global
 		{E8071203-085E-4B90-9C5C-39D546ED6FE2}.Release|x64.Build.0 = Release|x64
 		{E8071203-085E-4B90-9C5C-39D546ED6FE2}.Release|x86.ActiveCfg = Release|Win32
 		{E8071203-085E-4B90-9C5C-39D546ED6FE2}.Release|x86.Build.0 = Release|Win32
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Debug|x64.ActiveCfg = Debug|x64
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Debug|x64.Build.0 = Debug|x64
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Debug|x86.ActiveCfg = Debug|x64
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Release|x64.ActiveCfg = Release|x64
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Release|x64.Build.0 = Release|x64
+		{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
