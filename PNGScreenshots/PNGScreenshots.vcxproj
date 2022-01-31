@@ -16,7 +16,7 @@
     <ProjectGuid>{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}</ProjectGuid>
     <RootNamespace>TwoDAPrinter</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>PNGScreenShots</ProjectName>
+    <ProjectName>LE1PNGScreenShots</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -47,12 +47,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>PNGScreenShots</TargetName>
+    <TargetName>LE1PNGScreenShots</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>PNGScreenShots</TargetName>
+    <TargetName>LE1PNGScreenShots</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -90,7 +90,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="fpng\fpng.cpp" />
-    <ClCompile Include="PNGScreenShots.cpp" />
+    <ClCompile Include="LE1PNGScreenShots.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common.h" />

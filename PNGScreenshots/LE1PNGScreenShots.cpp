@@ -1,16 +1,35 @@
+#define GAMELE1
+//#define GAMELE2
+//#define GAMELE3
+#define MYHOOK "PNGScreenShots_"
+
+
 #include <filesystem>
 #include <stdio.h>
 #include <fstream>
 #include <Shlwapi.h>
+#include "fpng/fpng.h"
+
+#ifdef GAMELE1
 #include "../LE1-SDK/SdkInitializer.h"
 #include "../LE1-SDK/SdkHeaders.h"
 #include "../LE1-SDK/Interface.h"
 #include "../LE1-SDK/Common.h"
-#include "fpng/fpng.h"
-
-#define MYHOOK "PNGScreenShots_"
-
 SPI_PLUGINSIDE_SUPPORT(L"PNGScreenShots", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
+#elif defined(GAMELE2)
+#include "../LE2-SDK/SdkInitializer.h"
+#include "../LE2-SDK/SdkHeaders.h"
+#include "../LE2-SDK/Interface.h"
+#include "../LE2-SDK/Common.h"
+SPI_PLUGINSIDE_SUPPORT(L"PNGScreenShots", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE2, SPI_VERSION_ANY);
+#elif defined(GAMELE3)
+#include "../LE3-SDK/SdkInitializer.h"
+#include "../LE3-SDK/SdkHeaders.h"
+#include "../LE3-SDK/Interface.h"
+#include "../LE3-SDK/Common.h"
+SPI_PLUGINSIDE_SUPPORT(L"PNGScreenShots", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE3, SPI_VERSION_ANY);
+#endif
+
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
@@ -27,10 +46,12 @@ std::wstring wstring_format(const std::wstring& format, Args ... args)
 	return std::wstring(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
 }
 
-// ProcessEvent hook (for non-native .Activated())
+// ======================================================================
+// appCreateBitmap hook
 // ======================================================================
 
-typedef void (*tAppCreateBitmap)(wchar_t* pattern, int width, int height, FColor* data, void* fileManager); // ghidra shows 5th param but not sure what it is
+// Prototypes for appCreateBitmap
+typedef void (*tAppCreateBitmap)(wchar_t* pattern, int width, int height, FColor* data, void* fileManager);
 tAppCreateBitmap appCreateBitmap = nullptr;
 tAppCreateBitmap appCreateBitmap_orig = nullptr;
 
@@ -75,40 +96,54 @@ void appCreateBitmap_hook(wchar_t* inputBaseName, int width, int height, FColor*
 	// Determine output filename.
 	auto path = std::filesystem::path(inputBaseName);
 	auto extension = path.extension();
-	if (extension != "png")
+	if (extension != ".png")
 	{
+		// Calculate a new name
 		auto outPath = std::filesystem::path(inputBaseName);
 		std::wstring newFname;
 		while (cachedScreenshotIndex < maxScreenshotIndex)
 		{
-			newFname = wstring_format(L"PNGScreenShot%05i.png", cachedScreenshotIndex);
-			cachedScreenshotIndex++;
+#ifdef GAMELE1
+			newFname = wstring_format(L"PNGLE1ScreenShot%05i.png", cachedScreenshotIndex);
+#elif defined(GAMELE2)
+			newFname = wstring_format(L"PNGLE2ScreenShot%05i.png", cachedScreenshotIndex);
+#elif defined(GAMELE3)
+			newFname = wstring_format(L"PNGLE3ScreenShot%05i.png", cachedScreenshotIndex);
+#endif
+			cachedScreenshotIndex++; // Increment the cached index immediately.
 			outPath.replace_filename(newFname);
 
 			// Check if file exists
 			if (!std::filesystem::exists(outPath))
 			{
+				// File doesn't exist. Use this one
 				path = outPath;
 				break;
 			}
+			// File exists, go to next one
 		}
 
 		if (cachedScreenshotIndex == maxScreenshotIndex)
 			return; // Can't take any more screenshots
 	}
 
-
-	fpng::fpng_encode_image_to_wfile(path.c_str(), newImageData.data(), width, height, 3, fpng::FPNG_DECODE_NOT_FPNG); // 4 bpp, no flags
+	// Save the image data using the fpng library.
+	fpng::fpng_encode_image_to_wfile(path.c_str(), newImageData.data(), width, height, 3, 0U); // 3bpp, no flags
 }
 
 
 SPI_IMPLEMENT_ATTACH
 {
-	Common::OpenConsole();
-
+	// Hook appCreateBitmap and provide our own implementation of saving the bitmap data to disk.
 	auto _ = SDKInitializer::Instance();
-	// Hook ProcessEvent for Non-Native
+#ifdef GAMELE1
 	INIT_FIND_PATTERN_POSTHOOK(appCreateBitmap, /*40 55 53 56 57*/ "41 54 41 55 41 56 41 57 48 8d ac 24 38 f8 ff ff 48 81 ec c8 08 00 00 48 c7 44 24 70 fe ff ff ff 48 8b 05 3c b6 55 01 48 33 c4 48 89 85 b0 07 00 00 4c 89 4c 24 48 44 89 44 24 58");
+#elif defined(GAMELE2)
+	INIT_FIND_PATTERN_POSTHOOK(appCreateBitmap, /*40 55 53 56 57 */ "41 54 41 55 41 56 41 57 48 8d ac 24 38 f8 ff ff 48 81 ec c8 08 00 00 48 c7 44 24 70 fe ff ff ff 48 8b 05 ec 2a 58 01");
+#elif defined(GAMELE3)
+	INIT_FIND_PATTERN_POSTHOOK(appCreateBitmap, /*40 55 53 56 57 */ "41 54 41 55 41 56 41 57 48 8d ac 24 78 f8 ff ff 48 81 ec 88 08 00 00 48 c7 44 24 60 fe ff ff ff");
+#endif
+
 	if (auto rc = InterfacePtr->InstallHook(MYHOOK "appCreateBitmap", appCreateBitmap, appCreateBitmap_hook, (void**)&appCreateBitmap_orig);
 		rc != SPIReturn::Success)
 	{
@@ -120,6 +155,5 @@ SPI_IMPLEMENT_ATTACH
 
 SPI_IMPLEMENT_DETACH
 {
-	Common::CloseConsole();
-		return true;
+	return true;
 }
