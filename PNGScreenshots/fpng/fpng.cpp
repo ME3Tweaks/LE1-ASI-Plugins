@@ -1803,6 +1803,7 @@ do_literals:
 	}
 
 #ifndef FPNG_NO_STDIO
+	// writes to ansi path
 	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags)
 	{
 		std::vector<uint8_t> out_buf;
@@ -1812,6 +1813,31 @@ do_literals:
 		FILE* pFile = nullptr;
 #ifdef _MSC_VER
 		fopen_s(&pFile, pFilename, "wb");
+#else
+		pFile = fopen(pFilename, "wb");
+#endif
+		if (!pFile)
+			return false;
+
+		if (fwrite(out_buf.data(), 1, out_buf.size(), pFile) != out_buf.size())
+		{
+			fclose(pFile);
+			return false;
+		}
+
+		return (fclose(pFile) != EOF);
+	}
+
+	// writes to wide path
+	bool fpng_encode_image_to_wfile(const wchar_t* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags)
+	{
+		std::vector<uint8_t> out_buf;
+		if (!fpng_encode_image_to_memory(pImage, w, h, num_chans, out_buf, flags))
+			return false;
+
+		FILE* pFile = nullptr;
+#ifdef _MSC_VER
+		_wfopen_s(&pFile, pFilename, L"wb");
 #else
 		pFile = fopen(pFilename, "wb");
 #endif

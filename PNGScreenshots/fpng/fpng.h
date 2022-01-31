@@ -50,6 +50,7 @@ namespace fpng
 #ifndef FPNG_NO_STDIO
 	// Fast PNG encoding to the specified file.
 	bool fpng_encode_image_to_file(const char* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags = 0);
+	bool fpng_encode_image_to_wfile(const wchar_t* pFilename, const void* pImage, uint32_t w, uint32_t h, uint32_t num_chans, uint32_t flags = 0);
 #endif
 
 	// ---- Decompression
