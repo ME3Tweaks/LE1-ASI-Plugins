@@ -13,10 +13,10 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{C0B3993D-89FD-43D0-B1E3-B8A108197544}</ProjectGuid>
-    <RootNamespace>SeqActLog Enabler</RootNamespace>
+    <ProjectGuid>{C0B3993D-89FD-43D0-B1E3-B8A108199544}</ProjectGuid>
+    <RootNamespace>LE1 Autoload Enabler</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>LE1DebugLogger</ProjectName>
+    <ProjectName>LE1AutoloadEnabler</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -47,12 +47,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>LE1DebugLogger</TargetName>
+    <TargetName>LE1AutoloadEnabler</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>LE1DebugLogger</TargetName>
+    <TargetName>LE1AutoloadEnabler</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -68,9 +68,10 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /y "C:\Users\mgame\source\repos\ME3Tweaks\LE1-ASI-Plugins\x64\Debug\LE1DebugLogger.asi" "B:\SteamLibrary\steamapps\common\Mass Effect Legendary Edition\Game\ME1\Binaries\Win64\ASI\LE1DebugLogger.asi"</Command>
+      <Command>copy /y "C:\Users\mgame\source\repos\ME3Tweaks\LE1-ASI-Plugins\x64\Debug\LE1AutoloadEnabler.asi" "B:\SteamLibrary\steamapps\common\Mass Effect Legendary Edition\Game\ME1\Binaries\Win64\ASI\LE1AutoloadEnabler.asi"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -84,21 +85,27 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="DebugLogger.cpp" />
+    <ClCompile Include="LE1AutoloadEnabler.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LE1-SDK\LE1-SDK.vcxproj">
       <Project>{e8071203-085e-4b90-9c5c-39d546ed6fe2}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ExtraContent.h" />
+    <ClInclude Include="Logging.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

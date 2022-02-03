@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31919.166
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31911.196
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1ASITemplate", "LE1ASITemplate\LE1ASITemplate.vcxproj", "{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}"
 EndProject
@@ -19,7 +19,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1LEXInterop", "LE1LEXInte
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FunctionLogger", "FunctionLogger\FunctionLogger.vcxproj", "{F5C37F91-930C-4037-B0A0-C8C352636899}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DebugLogger", "LE1DebugLogger\LE1DebugLogger.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108197544}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1DebugLogger", "LE1DebugLogger\LE1DebugLogger.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108197544}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MExperiments", "MExperiments\MExperiements.vcxproj", "{160E1D32-278C-410F-9734-DAAC56711EFF}"
 EndProject
@@ -27,9 +27,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "2DAPrinter", "2DAPrinter\2D
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1-SDK", "LE1-SDK\LE1-SDK.vcxproj", "{E8071203-085E-4B90-9C5C-39D546ED6FE2}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PNGScreenShots", "PNGScreenshots\PNGScreenshots.vcxproj", "{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1PNGScreenShots", "PNGScreenshots\PNGScreenshots.vcxproj", "{8298E95F-CC4D-440D-B9E6-7B7BC0DF2FE5}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1AppearanceTest", "LE1AppearanceTest\LE1AppearanceTest.vcxproj", "{F334D9C9-36B2-4D64-A052-E1C13E322A23}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1AutoloadEnabler", "LE1AutoloadEnabler\LE1AutoloadEnabler.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108199544}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -131,6 +133,12 @@ Global
 		{F334D9C9-36B2-4D64-A052-E1C13E322A23}.Release|x64.Build.0 = Release|x64
 		{F334D9C9-36B2-4D64-A052-E1C13E322A23}.Release|x86.ActiveCfg = Release|x64
 		{F334D9C9-36B2-4D64-A052-E1C13E322A23}.Release|x86.Build.0 = Release|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Debug|x64.ActiveCfg = Debug|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Debug|x64.Build.0 = Debug|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Debug|x86.ActiveCfg = Debug|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x64.ActiveCfg = Release|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x64.Build.0 = Release|x64
+		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -160,6 +160,28 @@ void FConfigCombineFromBuffer_hook(UObject* Context, wchar_t* filePath, FString*
 	FConfigCombineFromBuffer_orig(Context, filePath, contents, extra);
 }
 
+#pragma region TFCRegistering
+typedef void (*tRegisterTFC)(FString* name);
+tRegisterTFC RegisterTFC = nullptr;
+tRegisterTFC RegisterTFC_orig = nullptr;
+
+bool testRegistered = false;
+
+void RegisterTFC_hook(FString* tfc)
+{
+	/*if (!testRegistered)
+	{
+		testRegistered = true;
+		FString str = L"C:\\Users\\mgame\\Desktop\\Textures_DLC_MOD_AdvancedWeaponModels.tfc";
+		RegisterTFC_hook(&str);
+	}*/
+	logMessage(L"Registering TFC:", L"%s", tfc->Data, nullptr);
+
+
+	RegisterTFC_orig(tfc);
+}
+#pragma endregion TFCRegistering
+
 
 // Configures the hooks for built-in logging functions that don't output anything.
 void hookLoggingFunc(ISharedProxyInterface* InterfacePtr)
@@ -309,7 +331,7 @@ SPI_IMPLEMENT_ATTACH
 
 
 	auto _ = SDKInitializer::Instance();
-	writeln(L"Initializing CreateImport hook...");
+	/*writeln(L"Initializing CreateImport hook...");
 	if (auto const rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&CreateImport), "48 8b c4 55 41 54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
 		rc != SPIReturn::Success)
 	{
@@ -336,7 +358,7 @@ SPI_IMPLEMENT_ATTACH
 	{
 		writeln(L"Attach - failed to hook ProcessInternal: %d / %s", rc, SPIReturnToString(rc));
 		return false;
-	}
+	}*/
 
 	// LOAD PACKAGE PERSISTENT ----------------------------------------------------------------
 	/*writeln(L"Initializing LoadPackagePersistent hook...");
@@ -356,7 +378,11 @@ SPI_IMPLEMENT_ATTACH
 	writeln(L"Hooked LoadPackagePersistent");*/
 
 	// LOGF HOOK?--------------------
-	hookLoggingFunc(InterfacePtr);
+	//hookLoggingFunc(InterfacePtr);
+
+	// This is mainly just for debugging TFC registration
+	INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
+	INIT_HOOK_PATTERN(RegisterTFC);
 
 	return true;
 }
