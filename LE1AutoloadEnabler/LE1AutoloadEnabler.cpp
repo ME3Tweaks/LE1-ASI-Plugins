@@ -69,30 +69,28 @@ typedef void (*tRegisterTFC)(FString* name);
 tRegisterTFC RegisterTFC = nullptr;
 tRegisterTFC RegisterTFC_orig = nullptr;
 
-#define NUM_LE1_TFCS 19
-std::vector<FString> DLCTFCsToRegister;
-int numRegisteredTFCs = 0;
+std::vector<FString*> DLCTFCsToRegister;
+bool registeredFirstTFC = false;
 
 // Logs a message and registers a TFC
-void RegisterTFCWrapper(FString tfcPath)
+void RegisterTFCWrapper(FString* tfcPath)
 {
-	//MessageBoxW(NULL, L"LOL", L"STUFF", 0);
-	writeln(L"Registering DLC mod TFC file: %s", tfcPath.Data);
-	RegisterTFC_orig(&tfcPath);
+	writeln(L"Registering DLC mod TFC file: %s", tfcPath->Data);
+	RegisterTFC_orig(tfcPath);
+	free(tfcPath->Data); // Data consturcted here was made with _wcsdup
 }
 
 void RegisterTFC_hook(FString* tfc)
 {
-	RegisterTFC_orig(tfc);
-	numRegisteredTFCs++;
-
-	if (numRegisteredTFCs == NUM_LE1_TFCS) //-1 so we can hook onto the last one
+	if (!registeredFirstTFC)
 	{
-		for each (FString tfcPath in DLCTFCsToRegister)
+		registeredFirstTFC = true;
+		for each (FString* tfcPath in DLCTFCsToRegister)
 		{
 			RegisterTFCWrapper(tfcPath);
 		}
 	}
+	RegisterTFC_orig(tfc);
 }
 
 // ProcessIni hook
@@ -126,6 +124,7 @@ void ProcessIni_hook(ExtraContent* ExtraContent, FString* IniPath, FString* Base
 
 
 // ======================================================================
+
 // ProcessEvent hook
 // Renders autoload profiler, allows toggling it.
 // ======================================================================
@@ -180,6 +179,11 @@ SPI_IMPLEMENT_ATTACH
 		initLog();
 		writeln(L"Attach - hello there!");
 
+		// Find RegisterTFC so we can register TFCs
+		// As TFCs are one of the first things loaded this must be done ASAP
+		INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
+		INIT_HOOK_PATTERN(RegisterTFC); // We will load our TFCs first
+
 #ifndef NDEBUG
 		// Initialize the SDK because we need object names.
 		INIT_CHECK_SDK();
@@ -193,12 +197,8 @@ SPI_IMPLEMENT_ATTACH
 		INIT_FIND_PATTERN(ProcessIni, "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");
 		INIT_HOOK_PATTERN(ProcessIni);
 
-		// Find RegisterTFC so we can register TFCs
-		// As TFCs are one of the first things loaded this must be done ASAP
-		INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
-		INIT_HOOK_PATTERN(RegisterTFC); // We will load our TFCs first
-
 		// Get a list of DLC Autoloads.
+
 		for (const auto& autoload : GetAllDLCAutoloads(GetDLCsRoot()))
 		{
 			writeln(L"Attach - found a DLC autoload: %s", autoload.c_str());
@@ -214,15 +214,14 @@ SPI_IMPLEMENT_ATTACH
 
 				if (entry.path().extension() == L".tfc") {
 					// Due to startup timing issues we have to do this
-					auto tfcPath = FString(const_cast<wchar_t*>(entry.path().c_str()));
-					if (numRegisteredTFCs >= NUM_LE1_TFCS)
+					if (registeredFirstTFC)
 					{
 						// This one won't be in list so we have to register it now.
-						RegisterTFCWrapper(tfcPath);
+						RegisterTFCWrapper(new FString(_wcsdup(entry.path().c_str())));
 					}
-					 else
+					else
 					{
-						DLCTFCsToRegister.emplace_back(); // We have to wait until first registration attempt or we'll hit a null pointer
+						DLCTFCsToRegister.push_back(new FString(_wcsdup(entry.path().c_str()))); // We have to wait until first registration attempt or we'll hit a null pointer
 					}
 				}
 			}
