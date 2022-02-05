@@ -177,7 +177,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 SPI_IMPLEMENT_ATTACH
 {
 		initLog();
-		writeln(L"Attach - hello there!");
+		//writeln(L"Attach - hello there!");
 
 		// Find RegisterTFC so we can register TFCs
 		// As TFCs are one of the first things loaded this must be done ASAP
