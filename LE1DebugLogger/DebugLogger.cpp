@@ -2,10 +2,8 @@
 #include <io.h>
 #include <string>
 #include <fstream>
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
-#define MYHOOK "DebugLogger_"
+#include "LE1DebugLogger.h"
+#include "HookPrototypes.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_PRELOAD;
@@ -26,9 +24,11 @@ void WINAPI OutputDebugStringW_Hook(LPCWSTR lpcszString)
 	logger.flush();
 }
 
-typedef UObject* (*tCreateImport)(ULinkerLoad* Context, int UIndex);
-tCreateImport CreateImport = nullptr;
-tCreateImport CreateImport_orig = nullptr;
+
+void* GFileManager;
+
+
+// LOG FAILED IMPORTS
 UObject* CreateImport_hook(ULinkerLoad* Context, int i)
 {
 	UObject* object = CreateImport_orig(Context, i);
@@ -42,10 +42,18 @@ UObject* CreateImport_hook(ULinkerLoad* Context, int i)
 	return object;
 }
 
+// DEBUG: APP LOAD FILE TO STRING
+bool appLoadFileToString_hook(FString* result, wchar_t* filename, void* fileManager, unsigned int flags1)
+{
+	// Param3: GFileManager?
+	GFileManager = fileManager;
+	writeln(L"appLoadFileToString: %s", filename);
+	auto loadResult = appLoadFileToString_orig(result, filename, fileManager, flags1);
+	return loadResult;
+}
+
+
 // LOAD PACKAGE PERSISTENT
-typedef UObject* (*tLoadPackagePersistent)(int64 param1, const wchar_t* param2, uint32 param3, int64* param4, uint32* param5);
-tLoadPackagePersistent LoadPackagePersistent = nullptr;
-tLoadPackagePersistent LoadPackagePersistent_orig = nullptr;
 void LoadPackagePersistent_hook(int64 param1, const wchar_t* packageName, uint32 param3, int64* param4, uint32* param5)
 {
 	writeln("PERSISTENTPACKAGELOAD: %s", (void*)packageName, packageName);
@@ -71,36 +79,23 @@ void logMessage(const wchar_t* logSource, wchar_t* formatStr, void* param1, void
 }
 
 // LOGF
-typedef void (*tFOutputDeviceLogF)(void* outputDevice, wchar_t* formatStr, void* param1, void* param2);
-
-
-tFOutputDeviceLogF LogF = nullptr;
-tFOutputDeviceLogF LogF_orig = nullptr;
 void LogF_hook(void* fOutputDevice, wchar_t* formatStr, void* param1, void* param2)
 {
 	logMessage(L"appLogf", formatStr, param1, param2);
 }
 
-typedef void (*tFOutputDeviceErrorLogF)(void* outputDevice, int* code, wchar_t* formatStr, void* param1);
-tFOutputDeviceErrorLogF ErrorLogF = nullptr;
-tFOutputDeviceErrorLogF ErrorLogF_orig = nullptr;
 void ErrorLogF_hook(void* fOutputDevice, int* code, wchar_t* formatStr, void* param1)
 {
 	logMessage(L"appErrorLogf", formatStr, param1, param1);
 }
 
 //typedef void (*tFOutputDeviceLogF)(void* param1, wchar_t* param2, wchar_t* param3);
-tFOutputDeviceLogF MsgF = nullptr;
-tFOutputDeviceLogF MsgF_orig = nullptr;
 void MsgF_hook(void* fOutputDevice, wchar_t* formatStr, wchar_t* param1)
 {
 	// Seems dangerous.
 	logMessage(L"appMsgf", formatStr, param1, 0);
 }
 
-typedef void (*tMessageBoxF)(int messageBoxType, wchar_t* formatString, wchar_t* param3);
-tMessageBoxF MsgFDialog = nullptr;
-tMessageBoxF MsgFDialog_orig = nullptr;
 void MsgFDialog_hook(int messageBoxType, wchar_t* formatStr, wchar_t* param1)
 {
 	MessageBoxW(NULL, formatStr, L"Game message", 0x0);
@@ -151,22 +146,27 @@ void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
 	ProcessInternal_orig(Context, Stack, Result);
 }
 
-typedef void (*tCombineFromBuffer)(UObject* Context, wchar_t* filePath, FString* contents, int extra);
-tCombineFromBuffer FConfigCombineFromBuffer = nullptr;
-tCombineFromBuffer FConfigCombineFromBuffer_orig = nullptr;
-void FConfigCombineFromBuffer_hook(UObject* Context, wchar_t* filePath, FString* contents, int extra)
+// DEBUGGING RE ONLY
+bool autoConfigTestDone = false;
+void FConfigCombineFromBuffer_hook(void* Context, wchar_t* filePath, FString* contents, int extra)
 {
-	writeln("FConfig::CombineFromBuffer: %s", filePath);
+	if (!autoConfigTestDone) {
+		autoConfigTestDone = true;
+		FString loadedIni;
+		wchar_t* path = L"X:\\Google Drive\\Mass Effect Legendary Modding\\LE1\\FConfigCombiner\\BIOGame.ini";
+		wchar_t* fakePath = L"..\\..\\BIOGame\\Config\\BIOGame.ini";
+		if (appLoadFileToString_orig(&loadedIni, path, GFileManager, 0))
+		{
+			FConfigCombineFromBuffer_orig(Context, fakePath, &loadedIni, 0);
+			writeln(L"Did combiney thing");
+		}
+	}
+	writeln("FConfig::CombineFromBuffer: %p %s", Context, filePath);
 	FConfigCombineFromBuffer_orig(Context, filePath, contents, extra);
 }
 
 #pragma region TFCRegistering
-typedef void (*tRegisterTFC)(FString* name);
-tRegisterTFC RegisterTFC = nullptr;
-tRegisterTFC RegisterTFC_orig = nullptr;
-
 bool testRegistered = false;
-
 void RegisterTFC_hook(FString* tfc)
 {
 	/*if (!testRegistered)
@@ -176,12 +176,50 @@ void RegisterTFC_hook(FString* tfc)
 		RegisterTFC_hook(&str);
 	}*/
 	logMessage(L"Registering TFC:", L"%s", tfc->Data, nullptr);
-
-
 	RegisterTFC_orig(tfc);
 }
 #pragma endregion TFCRegistering
 
+#pragma region FindFiles
+bool redirected = false;
+FString myData[3];
+
+void FindFiles_hook(void* classPtr, TArray<wchar_t>* outFiles, wchar_t* searchPattern, bool files, bool directories, int flagSet)
+{
+	writeln(L"FindFiles: Flag %i, Files: %i, Folders: %i, %s", flagSet, files, directories, searchPattern);
+	FindFiles_orig(classPtr, outFiles, searchPattern, files, directories, flagSet);
+	writeln(L"  >> Found %d files", outFiles->Count);
+}
+
+#pragma endregion FindFiles
+
+// Following is used to register ISB. Left here for documentation purposes.
+
+/*
+#pragma region CachePackage
+typedef void (*tCachePackage)(long long parm1, wchar_t* filePath, bool overrideIfDupe, bool warnIfExists);
+tCachePackage CachePackage = nullptr;
+tCachePackage CachePackage_orig = nullptr;
+void CachePackage_hook(long long parm1, wchar_t* filePath, bool overrideIfDupe, bool warnIfExists)
+{
+	//CachePackage = (tCachePackage)0x7ff7121b8fb0;
+	writeln(L"CachePackage: OVERRIDE: %d WARN: %d %s", overrideIfDupe, warnIfExists, filePath);
+
+	CachePackage_orig(parm1, filePath, overrideIfDupe, warnIfExists);
+}
+
+tCachePackage CacheContentWrapper = nullptr;
+tCachePackage CachePackageWrapper_orig = nullptr;
+void CachePackageWrapper_hook(long long parm1, wchar_t* filePath, bool overrideIfDupe, bool warnIfExists)
+{
+	//CachePackage = (tCachePackage)0x7ff7121b8fb0;
+	writeln(L"CachePackageWrapper: OVERRIDE: %d WARN: %d %s", overrideIfDupe, warnIfExists, filePath);
+
+	CachePackageWrapper_orig(parm1, filePath, overrideIfDupe, warnIfExists);
+}
+
+#pragma endregion CachePackage
+*/
 
 // Configures the hooks for built-in logging functions that don't output anything.
 void hookLoggingFunc(ISharedProxyInterface* InterfacePtr)
@@ -319,18 +357,38 @@ void hookLoggingFunc(ISharedProxyInterface* InterfacePtr)
 SPI_IMPLEMENT_ATTACH
 {
 	Common::OpenConsole();
-	writeln(L"Initializing DebugLogger...");
-
-	if (auto rc = InterfacePtr->InstallHook("OutputDebugStringW", (void*)OutputDebugStringW, (void*)OutputDebugStringW_Hook, (void**)&OutputDebugStringW_Orig);
-		rc != SPIReturn::Success)
+	if (auto rc = InterfacePtr->InstallHook("OutputDebugStringW", (void*)OutputDebugStringW, (void*)OutputDebugStringW_Hook, (void**)&OutputDebugStringW_Orig);	rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to hook OutputDebugStringW: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
-	writeln(L"Initialized DebugLogger");
-
 
 	auto _ = SDKInitializer::Instance();
+
+	// Left here for documentation purposes
+	/*
+	if (auto rc = InterfacePtr->InstallHook("CachePackage", (void*)0x7ff7121b8fb0, (void*)CachePackage_hook, (void**)&CachePackage_orig);	rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook CachePackage: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+
+	if (auto rc = InterfacePtr->InstallHook("CachePackageWrapper", (void*)0x7ff7120e3760, (void*)CachePackageWrapper_hook, (void**)&CachePackageWrapper_orig);	rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook CachePackageWrapper: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}*/
+
+
+	// Works, just disabled right now
+	//INIT_FIND_PATTERN_POSTHOOK(FindFiles, /*40 55 53 56 57*/ "41 54 41 55 41 56 41 57 48 8d ac 24 d8 fa ff ff 48 81 ec 28 06 00 00 48 c7 45 d0 fe ff ff ff");
+	//INIT_HOOK_PATTERN(FindFiles);
+
+	INIT_FIND_PATTERN_POSTHOOK(appLoadFileToString, /*48 8b c4 55 41*/ " 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 17 fe ff ff ff");
+	INIT_HOOK_PATTERN(appLoadFileToString);
+
+	INIT_FIND_PATTERN_POSTHOOK(CreateImport, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
+	INIT_HOOK_PATTERN(CreateImport);
 	/*writeln(L"Initializing CreateImport hook...");
 	if (auto const rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&CreateImport), "48 8b c4 55 41 54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
 		rc != SPIReturn::Success)
@@ -361,28 +419,15 @@ SPI_IMPLEMENT_ATTACH
 	}*/
 
 	// LOAD PACKAGE PERSISTENT ----------------------------------------------------------------
-	/*writeln(L"Initializing LoadPackagePersistent hook...");
-	if (auto const rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&LoadPackagePersistent), "40 53 56 57 41 54 41 55 41 56 41 57 48 81 ec e0 02 00 00 48 c7 84 24 b8 00 00 00");
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to find LoadPackagePersistent pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-
-	if (auto const rc = InterfacePtr->InstallHook(MYHOOK "LoadPackagePersistent", LoadPackagePersistent, LoadPackagePersistent_hook, reinterpret_cast<void**>(&LoadPackagePersistent_orig));
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to hook LoadPackagePersistent: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-	writeln(L"Hooked LoadPackagePersistent");*/
+	//INIT_FIND_PATTERN_POSTHOOK(LoadPackagePersistent, /*40 53 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec e0 02 00 00 48 c7 84 24 b8 00 00 00");
+	//INIT_HOOK_PATTERN(LoadPackagePersistent);
 
 	// LOGF HOOK?--------------------
-	//hookLoggingFunc(InterfacePtr);
+	hookLoggingFunc(InterfacePtr);
 
 	// This is mainly just for debugging TFC registration
-	INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
-	INIT_HOOK_PATTERN(RegisterTFC);
+	//INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
+	//INIT_HOOK_PATTERN(RegisterTFC);
 
 	return true;
 }
