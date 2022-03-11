@@ -64,7 +64,7 @@ unsigned ExecHandler_hook(UEngine* Context, wchar_t* cmd, void* unk)
 	{
 		const auto seps = L" \t";
 		wchar_t* context = nullptr;
-		auto token = wcstok_s(cmd, seps, &context);
+		wchar_t* const token = wcstok_s(cmd, seps, &context);
 
 		if (token == nullptr)
 		{
@@ -128,7 +128,7 @@ void CallFunction_hook(UObject* Context, LE1FFrame* Stack, void* Result, UFuncti
 
 void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* outParmInfo = nullptr)
 {
-	BYTE* propAddr;
+	BYTE* propAddr = nullptr;
 	logger.IncreaseIndent();
 	for (auto curChild = node->Children; curChild; curChild = curChild->Next)
 	{
@@ -136,24 +136,37 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		{
 			continue;
 		}
+
 		auto prop = static_cast<UProperty*>(curChild);
+		if (prop->PropertyFlags & 0x400) //ReturnValue flag
+		{
+			continue;
+		}
 		if (prop->PropertyFlags & 0x100) //OutParm flag
 		{
-			if (outParmInfo == nullptr)
+			for (auto curOutParm = outParmInfo; curOutParm; curOutParm = curOutParm->Next)
 			{
-				continue;
+				if (curOutParm->Prop == prop)
+				{
+					propAddr = curOutParm->PropAddr;
+					break;
+				}
 			}
-			propAddr = outParmInfo->PropAddr;
-			outParmInfo = outParmInfo->Next;
 		}
 		else
 		{
 			propAddr = propsOffset + prop->Offset;
 		}
 
+		if (propAddr == nullptr)
+		{
+			continue;
+		}
+
 		auto propClass = prop->Class;
 
-		logger.indent() << prop->GetName();
+		auto propName = prop->GetName();
+		logger.indent() << propName;
 		if (propClass == UIntProperty::StaticClass())
 		{
 			PRINTALLELEMENTS(int, value)
@@ -168,7 +181,7 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		}
 		else if (propClass == UBoolProperty::StaticClass())
 		{
-			PRINTALLELEMENTS(unsigned, (value ? "True" : "False"))
+			PRINTALLELEMENTS(unsigned*, (value ? "True" : "False"))
 		}
 		else if (propClass == UNameProperty::StaticClass())
 		{
@@ -176,7 +189,7 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		}
 		else if (propClass == UStrProperty::StaticClass())
 		{
-			PRINTALLELEMENTS(FString, value.Data)
+			PRINTALLELEMENTS(FString, "\"" << (value.Data ? value.Data : L"") << "\"")
 		}
 		else if (propClass == UStringRefProperty::StaticClass())
 		{
@@ -190,16 +203,19 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 			propClass = prop->Class;
 			logger.indent() << ": " << array.Count << " Elements ";
 			logger.out() << "[";
+			propAddr = array.Data;
 			if (propClass == UStructProperty::StaticClass())
 			{
 				auto uStruct = static_cast<UStructProperty*>(prop)->Struct;
 				logger.out() << " : ( StructType: " << uStruct->GetName() << ") [\n";
-				PrintPropertyValues(propAddr, uStruct);
 				for (int i = 0; i < array.Num(); ++i)
 				{
-					logger.indent() << ",\n";
-					propAddr += prop->ElementSize;
+					if (i > 0)
+					{
+						logger.indent() << ",\n";
+					}
 					PrintPropertyValues(propAddr, uStruct);
+					propAddr += prop->ElementSize;
 				}
 				logger.indent() << "]\n";
 			}
@@ -239,7 +255,7 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 					else if (propClass == UStrProperty::StaticClass())
 					{
 						auto value = *reinterpret_cast<FString*>(propAddr);
-						logger.out() << value.Data;
+						logger.out() << "\"" << (value.Data ? value.Data : L"") << "\"";
 					}
 					else if (propClass == UStringRefProperty::StaticClass())
 					{
@@ -277,7 +293,7 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		else if (propClass == UStructProperty::StaticClass())
 		{
 			auto uStruct = static_cast<UStructProperty*>(prop)->Struct;
-			auto value = *reinterpret_cast<UStructProperty*>(propAddr);
+			auto value = reinterpret_cast<UStructProperty*>(propAddr);
 			if (prop->ArrayDim > 1)
 			{
 				logger.out() << "[" << prop->ArrayDim << "] : ( StructType: " << uStruct->GetName() << ") [\n";
@@ -310,9 +326,11 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 // ======================================================================
 typedef void (*tNativeFunction) (UObject* Context, LE1FFrame* Stack, void* Result);
 void* ExecutionLoop = nullptr;
-void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, tNativeFunction* GNatives)
+void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, const tNativeFunction* GNatives)
 {
-	auto node = Stack->Node;
+	const auto node = Stack->Node;
+	const auto props_offset = Stack->Locals;
+	const auto out_parm_info = Stack->OutParms;
 	const bool isFunction = IsA<UFunction>(node);
 	logger.indent() << "Executing" << (isFunction ? "Function" : "State Code") << ": " << node->GetFullPath() << "\n";
 	logger.indent() << "On Object: " << Stack->Object->GetFullPath() << "\n";
@@ -322,17 +340,17 @@ void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, tNativ
 	BYTE buff[64];
 	while (*Stack->Code != (BYTE)OpCodes::Return)
 	{
-		if (isFunction) PrintPropertyValues(Stack->Locals, Stack->Node, Stack->OutParms);
+		if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
 		logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
 		const int idx = *Stack->Code++;
 		GNatives[idx](Context, Stack, buff);
 	}
-	if (isFunction) PrintPropertyValues(Stack->Locals, Stack->Node, Stack->OutParms);
+	if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
 	logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
 	Stack->Code++; //skip Return opcode
 	const int idx = *Stack->Code++;
 	GNatives[idx](Context, Stack, Result); //execute statement that places return value in Result
-	if (isFunction) PrintPropertyValues(Stack->Locals, Stack->Node, Stack->OutParms);
+	if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
 	logger.DecreaseIndent();
 }
 
@@ -497,6 +515,18 @@ SPI_IMPLEMENT_ATTACH
 		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}*/
+
+	//Good test function
+	/*
+	wchar_t* const token = L"SFXGame.BioSFHandler_Inventory.HandleEvent";
+	strcpy_s(debugFuncFullPath, wchar2string(token).c_str());
+	debugFunc = true;
+	PathRemoveFileSpec(logPath);
+	StrCat(logPath, L"\\");
+	StrCat(logPath, token);
+	StrCat(logPath, L".log");
+	logger.Open(logPath);
+	*/
 
 	return true;
 }
