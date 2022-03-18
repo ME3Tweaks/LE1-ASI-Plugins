@@ -4,7 +4,7 @@
 
 class ScriptDebugLogger
 {
-	std::ofstream logFile;
+	std::wofstream logFile;
 public:
 	int numSpacesIndent = 0;
 	
@@ -28,7 +28,7 @@ public:
 		}
 	}
 
-	std::ofstream&& indent()
+	std::wofstream&& indent()
 	{
 		for (int i = 0; i < numSpacesIndent; ++i)
 		{
@@ -37,7 +37,7 @@ public:
 		return std::move(logFile);
 	}
 
-	std::ofstream&& out()
+	std::wofstream&& out()
 	{
 		return std::move(logFile);
 	}
