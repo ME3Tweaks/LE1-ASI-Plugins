@@ -12,11 +12,11 @@
 
 #define MYHOOK "KismetLogger_"
 
-SPI_PLUGINSIDE_SUPPORT(L"FunctionLogger", L"1.0.0", L"Mgamerz", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"FunctionLogger", L"2.0.0", L"Mgamerz", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
-ME3TweaksASILogger logger("Function Logger v1", "FunctionLog.txt");
+ME3TweaksASILogger logger("Function Logger v2", "LE1FunctionLog.log");
 
 
 

@@ -13,12 +13,12 @@
 
 #define MYHOOK "LE1SeqActLogEnabler_"
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"3.0.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"LE1SeqActLogEnabler", L"4.0.0", L"HenBagle", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
-ME3TweaksASILogger logger("SeqAct_Log Enabler v3", "SeqActLog.txt");
-ScreenLogger screenLogger(L"SeqAct_Log Enabler v3");
+ME3TweaksASILogger logger("SeqAct_Log Enabler v4", "SeqActLog.log");
+ScreenLogger screenLogger(L"SeqAct_Log Enabler v4");
 
 std::wstringstream ss;
 

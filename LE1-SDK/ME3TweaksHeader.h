@@ -10,6 +10,7 @@
 #include <vector>
 #include <locale> 
 #include <codecvt>
+#include <chrono>
 #ifndef _NOSDK
 #include "SdkHeaders.h"
 #endif
@@ -171,6 +172,9 @@ public:
 
 		boottime = GetTickCount64();
 		writeToLog("ME3Tweaks ASI Logger - By Mgamerz\n"s, false);
+		auto currentTime = std::chrono::system_clock::now(); // get the time
+		auto formattedTime = std::chrono::system_clock::to_time_t(currentTime); // convert it to time_t type (loses some precision)
+		writeToLog(string_format("ASI boot time: %s\n", std::ctime(&formattedTime)), false);
 		writeToLog(string(loggername) + "\n", false);
 		writeToLog(string_format("Logging to %s%s\n", workingdir().c_str(), _logfname), true);
 		writeToLog("--------------------------------------------------------\n", false);

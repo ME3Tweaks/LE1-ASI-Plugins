@@ -5,7 +5,7 @@ typedef bool (*tappLoadFileToString)(FString* result, wchar_t* filename, void* f
 tappLoadFileToString appLoadFileToString_orig = nullptr;
 tappLoadFileToString appLoadFileToString = nullptr;
 
-// Creating an impor
+// Creating an import
 typedef UObject* (*tCreateImport)(ULinkerLoad* Context, int UIndex);
 tCreateImport CreateImport = nullptr;
 tCreateImport CreateImport_orig = nullptr;

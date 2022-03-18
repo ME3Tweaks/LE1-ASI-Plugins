@@ -100,7 +100,7 @@ void biohud_hook(UObject* Context, UFunction* Function, void* Parms, void* Resul
 	}
 	else if (!strcmp(Function->Name.GetName(), "DrawHUD"))
 	{
-		writeln(L"Func: %hs", Function->GetFullName());
+		//writeln(L"Func: %hs", Function->GetFullName());
 		auto hud = reinterpret_cast<AHUD*>(Context);
 		if (hud != nullptr)
 		{

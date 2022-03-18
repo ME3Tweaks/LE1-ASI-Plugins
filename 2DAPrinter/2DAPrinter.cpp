@@ -12,11 +12,11 @@
 
 #define MYHOOK "2DAPrinter_"
 
-SPI_PLUGINSIDE_SUPPORT(L"2DAPrinter", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"2DAPrinter", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
-ME3TweaksASILogger logger("2DA Printer v1", "2DAPrintLog.txt");
+ME3TweaksASILogger logger("2DA Printer v2", "2DAPrintLog.log");
 
 int remainingToGo = 500;
 
