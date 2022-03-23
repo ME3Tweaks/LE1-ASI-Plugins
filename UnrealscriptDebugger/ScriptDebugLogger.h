@@ -14,6 +14,11 @@ public:
 		logFile.open(path);
 	}
 
+	bool IsOpen() const
+	{
+		return logFile.is_open();
+	}
+
 	void IncreaseIndent(int amount = 4)
 	{
 		numSpacesIndent += 4;

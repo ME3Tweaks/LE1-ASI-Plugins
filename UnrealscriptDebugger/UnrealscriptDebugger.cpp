@@ -6,7 +6,9 @@
 #include <ostream>
 #include <streambuf>
 #include <sstream>
+#include <stack>
 
+#include "BreakPointContainer.h"
 #include "ScriptDebugLogger.h"
 #include "../LE1-SDK/Interface.h"
 #include "../LE1-SDK/Common.h"
@@ -41,11 +43,62 @@ struct LE1FFrame
 	OutParmInfo* OutParms;
 };
 
+struct DebuggerFrame
+{
+	UStruct* Node;
+	UObject* Object;
+	BYTE* CodeBaseAddr;
+	BYTE* Locals;
+	OutParmInfo* OutParms;
+	DebuggerFrame* PreviousFrame;
+	const char* NodePath;
+	USHORT NodePathLength;
+	USHORT CurrentPosition;
+};
+
+#define FFrame LE1FFrame
+
 TCHAR logPath[MAX_PATH];
 ScriptDebugLogger logger;
 
-char debugFuncFullPath[128];
+BreakPointContainer BreakpointMap;
+std::stack<DebuggerFrame*> DebuggerStack;
+#define currentStackDepth static_cast<int>(DebuggerStack.size())
+bool pendingAttach = false;
+bool pendingDetach = false;
+bool isStepping = false;
+int steppingMinStackDepth = 0;
+bool resume = false;
+
+char debugFuncFullPath[1024];
 bool debugFunc = false;
+
+
+struct LexMsg
+{
+	DebuggerFrame* currentFrame;
+	FNameEntry** NamePool;
+	ULONG64 msgLength;
+	wchar_t msg[1024];
+};
+
+void SendMsgToLEX(const wstring wstr, DebuggerFrame* stackFrame = nullptr) {
+	if (const auto handle = FindWindow(nullptr, L"Legendary Explorer"))
+	{
+		constexpr unsigned long SENT_FROM_LE1_DEBUGGER = 0x02AC00D7;
+		LexMsg msg;
+		msg.msgLength = wstr.length();
+		wcsncpy_s(msg.msg, wstr.c_str(), msg.msgLength + 1);
+		msg.currentFrame = stackFrame;
+		msg.NamePool = SDKInitializer::Instance()->GetBioNamePools();
+		COPYDATASTRUCT cds;
+		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
+		cds.dwData = SENT_FROM_LE1_DEBUGGER;
+		cds.cbData = sizeof(msg);
+		cds.lpData = &msg;
+		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
+	}
+}
 
 // ======================================================================
 // ExecHandler hook
@@ -100,10 +153,10 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 // ======================================================================
 // CallFunction hook
 // ======================================================================
-typedef void (*tCallFunction) (UObject* Context, LE1FFrame* Stack, void* Result, UFunction* Function);
+typedef void (*tCallFunction) (UObject* Context, FFrame* Stack, void* Result, UFunction* Function);
 tCallFunction CallFunction = nullptr;
 tCallFunction CallFunction_orig = nullptr;
-void CallFunction_hook(UObject* Context, LE1FFrame* Stack, void* Result, UFunction* Function)
+void CallFunction_hook(UObject* Context, FFrame* Stack, void* Result, UFunction* Function)
 {
 	CallFunction_orig(Context, Stack, Result, Function);
 }
@@ -181,6 +234,7 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 		}
 		else if (propClass == UBoolProperty::StaticClass())
 		{
+			//TODO: this is wrong! need to use bitmask!
 			PRINTALLELEMENTS(unsigned*, (value ? "True" : "False"))
 		}
 		else if (propClass == UNameProperty::StaticClass())
@@ -321,37 +375,116 @@ void PrintPropertyValues(BYTE* propsOffset, UStruct* const node, OutParmInfo* ou
 	logger.DecreaseIndent();
 }
 
+void breakState()
+{
+	isStepping = false;
+
+	SendMsgToLEX(L"Break", DebuggerStack.top());
+
+	MSG msg;
+    BOOL bRet; 
+	while ((bRet = GetMessage(&msg, nullptr, 0, 0)) != 0)
+	{
+		if (bRet == -1 || msg.message == WM_CLOSE)
+		{
+			msg.message = WM_QUIT;
+			pendingDetach = true;
+			break;
+		}
+		if (resume)
+		{
+			resume = false;
+			break;
+		}
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+    if (msg.message == WM_QUIT)
+    {
+		PostQuitMessage(static_cast<int>(msg.wParam));
+    }
+}
+
+__forceinline bool ShouldBreak(const std::string& nodePathString, const unsigned short location)
+{
+	return isStepping && currentStackDepth <= steppingMinStackDepth || BreakpointMap.HasBreakPoint(nodePathString, location);
+}
+
 // ======================================================================
 // ExecutionLoop detour
 // ======================================================================
-typedef void (*tNativeFunction) (UObject* Context, LE1FFrame* Stack, void* Result);
+typedef void (*tNativeFunction) (UObject* Context, FFrame* Stack, void* Result);
 void* ExecutionLoop = nullptr;
-void ExecutionLoop_hook(UObject* Context, LE1FFrame* Stack, void* Result, const tNativeFunction* GNatives)
+void ExecutionLoop_hook(UObject* Context, FFrame* Stack, void* Result, const tNativeFunction* GNatives)
 {
 	const auto node = Stack->Node;
-	const auto props_offset = Stack->Locals;
-	const auto out_parm_info = Stack->OutParms;
-	const bool isFunction = IsA<UFunction>(node);
-	logger.indent() << "Executing" << (isFunction ? "Function" : "State Code") << ": " << node->GetFullPath() << "\n";
-	logger.indent() << "On Object: " << Stack->Object->GetFullPath() << "\n";
-	logger.IncreaseIndent();
+	//const auto props_offset = Stack->Locals;
+	//const auto out_parm_info = Stack->OutParms;
+	//const bool isFunction = IsA<UFunction>(node);
+	const auto nodePathString = std::string(node->GetFullPath());
+
+	/*if (!pendingDetach)
+	{
+		logger.indent() << "Executing" << (isFunction ? "Function" : "State Code") << ": " << nodePathString.c_str() << "\n";
+		logger.indent() << "On Object: " << Stack->Object->GetFullPath() << "\n";
+		logger.IncreaseIndent();
+	}*/
 	const auto beginOffset = Stack->Code;
+
+	DebuggerFrame debugFrame;
+	debugFrame.Node = Stack->Node;
+	debugFrame.Object = Stack->Object;
+	debugFrame.Locals = Stack->Locals;
+	debugFrame.OutParms = Stack->OutParms;
+	debugFrame.CodeBaseAddr = Stack->Code;
+	debugFrame.CurrentPosition = 0;
+	debugFrame.PreviousFrame = DebuggerStack.empty() ? nullptr : DebuggerStack.top();
+	debugFrame.NodePath = nodePathString.c_str();
+	debugFrame.NodePathLength = static_cast<USHORT>(nodePathString.length());
+	DebuggerStack.push(&debugFrame);
 
 	BYTE buff[64];
 	while (*Stack->Code != (BYTE)OpCodes::Return)
 	{
-		if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
-		logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
+		if (!pendingDetach)
+		{
+			//if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
+			//logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
+			const auto location = static_cast<USHORT>(Stack->Code - beginOffset);
+			debugFrame.CurrentPosition = location;
+			if (ShouldBreak(nodePathString, location))
+			{
+				breakState();
+			}
+		}
 		const int idx = *Stack->Code++;
 		GNatives[idx](Context, Stack, buff);
 	}
-	if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
-	logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
+	if (!pendingDetach)
+	{
+		//if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
+		//logger.indent() << "Statement at: 0x" << std::hex << Stack->Code - beginOffset << std::dec << "\n";
+		const auto location = static_cast<USHORT>(Stack->Code - beginOffset);
+		debugFrame.CurrentPosition = location;
+		if (ShouldBreak(nodePathString, location))
+		{
+			breakState();
+		}
+	}
 	Stack->Code++; //skip Return opcode
 	const int idx = *Stack->Code++;
 	GNatives[idx](Context, Stack, Result); //execute statement that places return value in Result
-	if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
-	logger.DecreaseIndent();
+	/*if (!pendingDetach)
+	{
+		if (isFunction) PrintPropertyValues(props_offset, node, out_parm_info);
+		logger.DecreaseIndent();
+	}*/
+
+	DebuggerStack.pop();
+	if (steppingMinStackDepth < 1)
+	{
+		steppingMinStackDepth = 1;
+	}
 }
 
 bool PatchMemory(const void* patch, const SIZE_T patchSize)
@@ -413,18 +546,17 @@ bool RestoreExecutionLoop()
 // ProcessInternal hook
 // ======================================================================
 
-
-typedef void (*tProcessInternal)(UObject* Context, LE1FFrame* Stack, void* Result);
+typedef void (*tProcessInternal)(UObject* Context, FFrame* Stack, void* Result);
 tProcessInternal ProcessInternal = nullptr;
 tProcessInternal ProcessInternal_orig = nullptr;
-void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
+void ProcessInternal_hook(UObject* Context, FFrame* Stack, void* Result)
 {
 	if (!debugFunc)
 	{
 		ProcessInternal_orig(Context, Stack, Result);
 		return;
 	}
-	auto node = Stack->Node;
+	const auto node = Stack->Node;
 	bool removePatch = false;
 	//logger << "Executing: " << node->GetFullPath() << "\nOn Object: " << Stack->Object->GetFullPath() << "\n";
 
@@ -445,6 +577,109 @@ void ProcessInternal_hook(UObject* Context, LE1FFrame* Stack, void* Result)
 }
 
 
+// ======================================================================
+// GameEngineTick hook
+// ======================================================================
+
+typedef void (*tGameEngineTick)(UGameEngine* Context, FLOAT deltaSeconds);
+tGameEngineTick GameEngineTick = nullptr;
+tGameEngineTick GameEngineTick_orig = nullptr;
+void GameEngineTick_hook(UGameEngine* Context, FLOAT deltaSeconds)
+{
+	if (pendingAttach)
+	{
+		pendingAttach = false;
+		PatchExecutionLoop();
+		SendMsgToLEX(std::wstring(L"Attached"));
+	}
+	else if (pendingDetach)
+	{
+		pendingDetach = false;
+		resume = false;
+		BreakpointMap.ClearBreakPoints();
+		RestoreExecutionLoop();
+		SendMsgToLEX(std::wstring(L"Detached"));
+	}
+	GameEngineTick_orig(Context, deltaSeconds);
+}
+
+
+template<typename T>
+T Read(BYTE* ptr, const int offset)
+{
+	return *reinterpret_cast<T*>(ptr + offset);
+}
+
+enum PipeCommands
+{
+	CMD_AttachDebugger = 1,
+	CMD_DetachDebugger = 2,
+	CMD_BreakImmediate = 3,
+	CMD_Breakpoint = 4,
+		CMD_Add = 5,
+		CMD_Remove = 6,
+	CMD_StepInto = 7,
+	CMD_StepOver = 8,
+	CMD_StepOut = 9,
+	CMD_Resume = 10
+};
+
+void ProcessCommand(BYTE* str, DWORD len)
+{
+	switch (str[0])
+	{
+	case CMD_AttachDebugger:
+		pendingAttach = true;
+		break;
+	case CMD_DetachDebugger:
+		pendingDetach = true;
+		resume = true;
+		break;
+	case CMD_Breakpoint:
+	{
+		const auto op = Read<BYTE>(str, 1);
+		const auto breakOffset = Read<USHORT>(str, 2);
+		const auto functionPath = reinterpret_cast<char*>(str + 4);
+		if (op == CMD_Add)
+		{
+			BreakpointMap.AddBreakPoint(functionPath, breakOffset);
+		}
+		else if (op == CMD_Remove)
+		{
+			BreakpointMap.RemoveBreakPoint(functionPath, breakOffset);
+		}
+		break;
+	}
+	case CMD_BreakImmediate:
+		steppingMinStackDepth = INT_MAX;
+		isStepping = true;
+		break;
+
+	/*
+	 * BreakState commands (must only be issued if debugger is in the break state)
+	 */
+
+	case CMD_StepInto:
+		steppingMinStackDepth = INT_MAX;
+		isStepping = true;
+		resume = true;
+		break;
+	case CMD_StepOver:
+		steppingMinStackDepth = currentStackDepth;
+		isStepping = true;
+		resume = true;
+		break;
+	case CMD_StepOut:
+		steppingMinStackDepth = currentStackDepth - 1;
+		isStepping = true;
+		resume = true;
+		break;
+	case CMD_Resume:
+		resume = true;
+		break;
+	}
+}
+
 SPI_IMPLEMENT_ATTACH
 {
 	//Common::OpenConsole();
@@ -452,11 +687,8 @@ SPI_IMPLEMENT_ATTACH
 	logger.Open(logPath);
 
 	auto _ = SDKInitializer::Instance();
-	/*writeln(L"Attach - names at 0x%p, objects at 0x%p",
-		SDKInitializer::Instance()->GetBioNamePools(),
-		SDKInitializer::Instance()->GetObjects());*/
 
-	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&ProcessInternal), "40 53 55 56 57 48 81 EC 88 00 00 00 48 8B 05 B5 25 58 01");
+	/*if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&ProcessInternal), "40 53 55 56 57 48 81 EC 88 00 00 00 48 8B 05 B5 25 58 01");
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to find ProcessInternal pattern: %d / %s", rc, SPIReturnToString(rc));
@@ -467,7 +699,7 @@ SPI_IMPLEMENT_ATTACH
 	{
 		writeln(L"Attach - failed to hook ProcessInternal: %d / %s", rc, SPIReturnToString(rc));
 		return false;
-	}
+	}*/
 
 	if (const auto rc = InterfacePtr->FindPattern(&ExecutionLoop, "4c 8d 35 5c f2 5a 01 80 38 04 74 30 0f 1f 80 00 00 00 00");
 		rc != SPIReturn::Success)
@@ -486,6 +718,19 @@ SPI_IMPLEMENT_ATTACH
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to hook ExecHandler: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+
+	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&GameEngineTick), "48 8b c4 55 53 56 57 41 54 41 56 41 57 48 8d a8 e8 fd ff ff");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find GameEngineTick pattern: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+	if (const auto rc = InterfacePtr->InstallHook(SLHHOOK "GameEngineTick", GameEngineTick, GameEngineTick_hook, reinterpret_cast<void**>(&GameEngineTick_orig));
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook GameEngineTick: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
 
@@ -527,6 +772,33 @@ SPI_IMPLEMENT_ATTACH
 	StrCat(logPath, L".log");
 	logger.Open(logPath);
 	*/
+
+	
+	BYTE buffer[1024];
+	DWORD numBytesRead;
+	HANDLE hPipe = CreateNamedPipe(TEXT("\\\\.\\pipe\\LEX_LE1_SCRIPTDEBUG_PIPE"),
+		PIPE_ACCESS_DUPLEX,
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
+		1,
+		1024 * 16,
+		1024 * 16,
+		NMPWAIT_USE_DEFAULT_WAIT,
+	nullptr);
+
+	while (hPipe != INVALID_HANDLE_VALUE)
+	{
+		if (ConnectNamedPipe(hPipe, nullptr) != FALSE)   // wait for someone to connect to the pipe
+		{
+			while (ReadFile(hPipe, buffer, sizeof(buffer) - 1, &numBytesRead, nullptr) != FALSE)
+			{
+				/* add terminating zero */
+				buffer[numBytesRead] = '\0';
+				ProcessCommand(buffer, numBytesRead);
+			}
+		}
+		
+		DisconnectNamedPipe(hPipe);
+	}
 
 	return true;
 }

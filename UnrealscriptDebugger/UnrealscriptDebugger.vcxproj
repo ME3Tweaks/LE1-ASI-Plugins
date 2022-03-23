@@ -11,9 +11,11 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BreakPointContainer.cpp" />
     <ClCompile Include="UnrealscriptDebugger.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BreakPointContainer.h" />
     <ClInclude Include="ScriptDebugLogger.h" />
     <ClInclude Include="UnrealScriptDefinitions.h" />
   </ItemGroup>
