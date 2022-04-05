@@ -175,7 +175,7 @@ public:
 	struct FPointer                                    HashNext;                                         		// 0x0014 (0x0008) [0x0000000000021002]              ( CPF_Const | CPF_Native | CPF_EditConst )
 	struct FPointer                                    HashOuterNext;                                    		// 0x001C (0x0008) [0x0000000000021002]              ( CPF_Const | CPF_Native | CPF_EditConst )
 	struct FPointer                                    StateFrame;                                       		// 0x0024 (0x0008) [0x0000000000021002]              ( CPF_Const | CPF_Native | CPF_EditConst )
-	class UObject*                                     Linker;                                           		// 0x002C (0x0008) [0x0000000000821002]              ( CPF_Const | CPF_Native | CPF_EditConst | CPF_NoExport )
+	class ULinkerLoad*                                 Linker;                                           		// 0x002C (0x0008) [0x0000000000821002]              ( CPF_Const | CPF_Native | CPF_EditConst | CPF_NoExport )
 	struct FPointer                                    LinkerIndex;                                      		// 0x0034 (0x0008) [0x0000000000821002]              ( CPF_Const | CPF_Native | CPF_EditConst | CPF_NoExport )
 	int                                                NetIndex;                                         		// 0x003C (0x0004) [0x0000000000821002]              ( CPF_Const | CPF_Native | CPF_EditConst | CPF_NoExport )
 	class UObject*                                     Outer;                                            		// 0x0040 (0x0008) [0x0000000000021002]              ( CPF_Const | CPF_Native | CPF_EditConst )
@@ -1746,7 +1746,12 @@ UClass* UBioBaseSaveObject::pClassPointer = NULL;
 class UPackage : public UObject
 {
 public:
-	unsigned char                                      UnknownData00[ 0xB0 ];                            		// 0x0060 (0x00B0) MISSED OFFSET
+	unsigned char                                      UnknownData00[ 0x0C ];                            		// 0x0060 (0x000C) 
+	FGuid                                              Guid;                                                    // 0x006C (0x0010)
+	INT                                                FileSize;                                                // 0x007C (0x0004)
+	unsigned char                                      UnknownData01[ 0x24 ];                            		// 0x0080 (0x0024) 
+	FName											   ForcedExportBasePackageName;								// 0x00A4 (0x0008)
+	unsigned char                                      UnknownData02[ 0x64 ];                            		// 0x00AC (0x0064) 
 
 private:
 	static UClass* pClassPointer;

@@ -1,3 +1,8 @@
+#define GAME_LE1
+//#define GAME_LE2
+//#define GAME_LE3
+
+
 #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 #include <shlwapi.h>
 #include <psapi.h>
@@ -31,7 +36,8 @@ struct OutParmInfo
 	OutParmInfo* Next;
 };
 
-struct LE1FFrame
+#if defined GAME_LE1
+struct FFrame
 {
 	void* vtable;
 	int unks[3];
@@ -39,9 +45,14 @@ struct LE1FFrame
 	UObject* Object;
 	BYTE* Code;
 	BYTE* Locals;
-	LE1FFrame* PreviousFrame;
+	FFrame* PreviousFrame;
 	OutParmInfo* OutParms;
 };
+#elif defined GAME_LE2
+
+#elif defined GAME_LE3
+
+#endif
 
 struct DebuggerFrame
 {
@@ -51,18 +62,23 @@ struct DebuggerFrame
 	BYTE* Locals;
 	OutParmInfo* OutParms;
 	DebuggerFrame* PreviousFrame;
+	UFunction* NativeFunc;
 	const char* NodePath;
+	const wchar_t* FileName;
+	USHORT FileNameLength;
 	USHORT NodePathLength;
 	USHORT CurrentPosition;
 };
 
-#define FFrame LE1FFrame
 
 TCHAR logPath[MAX_PATH];
 ScriptDebugLogger logger;
 
+static ISharedProxyInterface* ProxyInterface;
+
 BreakPointContainer BreakpointMap;
 std::stack<DebuggerFrame*> DebuggerStack;
+std::map<std::string, std::wstring> NodePathToFileNameMap;
 #define currentStackDepth static_cast<int>(DebuggerStack.size())
 bool pendingAttach = false;
 bool pendingDetach = false;
@@ -82,7 +98,7 @@ struct LexMsg
 	wchar_t msg[1024];
 };
 
-void SendMsgToLEX(const wstring wstr, DebuggerFrame* stackFrame = nullptr) {
+void SendMsgToLEX(const wstring& wstr, DebuggerFrame* stackFrame = nullptr) {
 	if (const auto handle = FindWindow(nullptr, L"Legendary Explorer"))
 	{
 		constexpr unsigned long SENT_FROM_LE1_DEBUGGER = 0x02AC00D7;
@@ -158,7 +174,42 @@ tCallFunction CallFunction = nullptr;
 tCallFunction CallFunction_orig = nullptr;
 void CallFunction_hook(UObject* Context, FFrame* Stack, void* Result, UFunction* Function)
 {
+	constexpr int FUNC_NATIVE = 1024;
+	bool needPop = false;
+	if (Function->iNative || Function->FunctionFlags & FUNC_NATIVE)
+	{
+		//Native functions will not be executed by ProcessInternal, but should still be in the call stack
+		const auto nodePathString = std::string(Function->GetFullPath());
+		DebuggerFrame debugFrame;
+		debugFrame.Node = Stack->Node;
+		debugFrame.Object = Stack->Object;
+		debugFrame.Locals = Stack->Locals;
+		debugFrame.OutParms = Stack->OutParms;
+		debugFrame.CodeBaseAddr = Stack->Code;
+		debugFrame.CurrentPosition = 0;
+		debugFrame.PreviousFrame = DebuggerStack.empty() ? nullptr : DebuggerStack.top();
+		debugFrame.NativeFunc = Function;
+		debugFrame.NodePath = nodePathString.c_str();
+		debugFrame.NodePathLength = static_cast<USHORT>(nodePathString.length());
+		if (const auto pair = NodePathToFileNameMap.find(nodePathString); pair != NodePathToFileNameMap.end())
+		{
+			debugFrame.FileName = pair->second.c_str();
+			debugFrame.FileNameLength = static_cast<USHORT>(pair->second.length());
+		}
+		else
+		{
+			debugFrame.FileName = nullptr;
+		}
+		DebuggerStack.push(&debugFrame);
+		needPop = true;
+	}
+
 	CallFunction_orig(Context, Stack, Result, Function);
+
+	if (needPop)
+	{
+		DebuggerStack.pop();
+	}
 }
 
 #define SCRIPTOBJECTFULLPATH(objPtr) (objPtr ? objPtr->GetFullPath() : "None")
@@ -429,18 +480,29 @@ void ExecutionLoop_hook(UObject* Context, FFrame* Stack, void* Result, const tNa
 		logger.indent() << "On Object: " << Stack->Object->GetFullPath() << "\n";
 		logger.IncreaseIndent();
 	}*/
-	const auto beginOffset = Stack->Code;
+	BYTE* beginOffset = node->Script.Data;
 
 	DebuggerFrame debugFrame;
-	debugFrame.Node = Stack->Node;
+	debugFrame.Node = node;
 	debugFrame.Object = Stack->Object;
 	debugFrame.Locals = Stack->Locals;
 	debugFrame.OutParms = Stack->OutParms;
-	debugFrame.CodeBaseAddr = Stack->Code;
+	debugFrame.CodeBaseAddr = beginOffset;
 	debugFrame.CurrentPosition = 0;
 	debugFrame.PreviousFrame = DebuggerStack.empty() ? nullptr : DebuggerStack.top();
+	debugFrame.NativeFunc = nullptr;
 	debugFrame.NodePath = nodePathString.c_str();
 	debugFrame.NodePathLength = static_cast<USHORT>(nodePathString.length());
+	if (const auto pair = NodePathToFileNameMap.find(nodePathString); pair != NodePathToFileNameMap.end())
+	{
+		debugFrame.FileName = pair->second.c_str();
+		debugFrame.FileNameLength = static_cast<USHORT>(pair->second.length());
+	}
+	else
+	{
+		debugFrame.FileName = nullptr;
+	}
+
 	DebuggerStack.push(&debugFrame);
 
 	BYTE buff[64];
@@ -503,8 +565,15 @@ bool PatchMemory(const void* patch, const SIZE_T patchSize)
 	return true;
 }
 
-bool PatchExecutionLoop()
+bool AttachDebugger()
 {
+	//This won't work properly until LEBinkProxy has been updated
+	//if (const auto rc = ProxyInterface->InstallHook(SLHHOOK "CallFunction", CallFunction, CallFunction_hook, (void**)&CallFunction_orig);
+	//	rc != SPIReturn::Success)
+	//{
+	//	writeln(L"Attach - failed to hook CallFunction: %d / %s", rc, SPIReturnToString(rc));
+	//	//return false;
+	//}
 
 	BYTE patch[] = { 0x4c, 0x8d, 0x0d, 0x5c, 0xf2, 0x5a, 0x01, //LEA R9, [GNatives] //load the address of the native function array into the 4th argument register
 						   0x4C, 0x8B, 0xC5, //MOV R8, RBP //Move the Result pointer into the 3rd argument register
@@ -534,8 +603,16 @@ bool PatchExecutionLoop()
 	return PatchMemory(patch, sizeof(patch));
 }
 
-bool RestoreExecutionLoop()
+bool DetachDebugger()
 {
+	//This won't work properly until LEBinkProxy has been updated
+	//if (const auto rc = ProxyInterface->UninstallHook(SLHHOOK "CallFunction");
+	//	rc != SPIReturn::Success)
+	//{
+	//	writeln(L"Detach - failed to unhook CallFunction: %d / %s", rc, SPIReturnToString(rc));
+	//	//return false;
+	//}
+
 	const BYTE originalExecutionLoopBytes[] = { 0x4c, 0x8d, 0x35, 0x5c, 0xf2, 0x5a, 0x01, 0x80, 0x38, 0x04, 0x74, 0x30, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x43, 0x24, 0x4c, 0x8d, 0x44, 0x24, 0x30, 0x48, 0x8b, 0xd3, 0x0f, 0xb6, 0x08, 0x48, 0xff, 0xc0, 0x48, 0x89, 0x43, 0x24, 0x8b, 0xc1, 0x48, 0x8b, 0x4b, 0x1c, 0x41, 0xff, 0x14, 0xc6, 0x48, 0x8b, 0x43, 0x24, 0x80, 0x38, 0x04, 0x75, 0xd7, 0x48, 0xff, 0xc0, 0x4c, 0x8b, 0xc5, 0x48, 0x89, 0x43, 0x24, 0x48, 0x8b, 0xd3, 0x0f, 0xb6, 0x08, 0x48, 0xff, 0xc0, 0x48, 0x89, 0x43, 0x24, 0x8b, 0xc1, 0x48, 0x8b, 0x4b, 0x1c, 0x41, 0xff, 0x14, 0xc6, 0x48, 0x8b, 0x43, 0x24, 0x4c, 0x8b, 0xb4, 0x24, 0x80, 0x00, 0x00, 0x00, 0x80, 0x38, 0x41, 0x75, 0x17, 0x48, 0x8b, 0x4b, 0x1c, 0x48, 0xff, 0xc0, 0x4c, 0x8b, 0xc5, 0x48, 0x89, 0x43, 0x24, 0x48, 0x8b, 0xd3, 0xff, 0x15, 0xe6, 0xf3, 0x5a, 0x01 };
 
 	return PatchMemory(originalExecutionLoopBytes, sizeof(originalExecutionLoopBytes));
@@ -563,7 +640,7 @@ void ProcessInternal_hook(UObject* Context, FFrame* Stack, void* Result)
 	if (!_strcmpi(node->GetFullPath(), debugFuncFullPath))
 	{
 		debugFunc = false;
-		PatchExecutionLoop();
+		AttachDebugger();
 		removePatch = true;
 	}
 
@@ -571,7 +648,7 @@ void ProcessInternal_hook(UObject* Context, FFrame* Stack, void* Result)
 
 	if (removePatch)
 	{
-		RestoreExecutionLoop();
+		DetachDebugger();
 		logger.Close();
 	}
 }
@@ -589,7 +666,7 @@ void GameEngineTick_hook(UGameEngine* Context, FLOAT deltaSeconds)
 	if (pendingAttach)
 	{
 		pendingAttach = false;
-		PatchExecutionLoop();
+		AttachDebugger();
 		SendMsgToLEX(std::wstring(L"Attached"));
 	}
 	else if (pendingDetach)
@@ -597,10 +674,27 @@ void GameEngineTick_hook(UGameEngine* Context, FLOAT deltaSeconds)
 		pendingDetach = false;
 		resume = false;
 		BreakpointMap.ClearBreakPoints();
-		RestoreExecutionLoop();
+		DetachDebugger();
 		SendMsgToLEX(std::wstring(L"Detached"));
 	}
 	GameEngineTick_orig(Context, deltaSeconds);
+}
+
+
+// ======================================================================
+// SetLinker hook
+// ======================================================================
+
+typedef void (*tSetLinker)(UObject* Context, ULinkerLoad* Linker, int LinkerIndex);
+tSetLinker SetLinker = nullptr;
+tSetLinker SetLinker_orig = nullptr;
+void SetLinker_hook(UObject* Context, ULinkerLoad* Linker, int LinkerIndex)
+{
+	if (Context->Linker && IsA<UFunction>(Context))
+	{
+		NodePathToFileNameMap.insert_or_assign(std::string(Context->GetFullPath()), std::wstring(Context->Linker->Filename.Data));
+	}
+	SetLinker_orig(Context, Linker, LinkerIndex);
 }
 
 
@@ -680,6 +774,7 @@ void ProcessCommand(BYTE* str, DWORD len)
 	}
 }
 
+
 SPI_IMPLEMENT_ATTACH
 {
 	//Common::OpenConsole();
@@ -687,6 +782,15 @@ SPI_IMPLEMENT_ATTACH
 	logger.Open(logPath);
 
 	auto _ = SDKInitializer::Instance();
+
+	ProxyInterface = InterfacePtr;
+
+	if (const auto rc = InterfacePtr->FindPattern(&ExecutionLoop, "4c 8d 35 5c f2 5a 01 80 38 04 74 30 0f 1f 80 00 00 00 00");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find ExecutionLoop pattern: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
 
 	/*if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&ProcessInternal), "40 53 55 56 57 48 81 EC 88 00 00 00 48 8B 05 B5 25 58 01");
 		rc != SPIReturn::Success)
@@ -701,26 +805,6 @@ SPI_IMPLEMENT_ATTACH
 		return false;
 	}*/
 
-	if (const auto rc = InterfacePtr->FindPattern(&ExecutionLoop, "4c 8d 35 5c f2 5a 01 80 38 04 74 30 0f 1f 80 00 00 00 00");
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to find ExecutionLoop pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-
-	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&ExecHandler), "48 8b c4 48 89 50 10 55 56 57 41 54 41 55 41 56 41 57 48 8d a8 d8 fe ff ff");
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to find ExecHandler pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-	if (const auto rc = InterfacePtr->InstallHook(SLHHOOK "ExecHandler", ExecHandler, ExecHandler_hook, reinterpret_cast<void**>(&ExecHandler_orig));
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to hook ExecHandler: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-
 	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&GameEngineTick), "48 8b c4 55 53 56 57 41 54 41 56 41 57 48 8d a8 e8 fd ff ff");
 		rc != SPIReturn::Success)
 	{
@@ -731,6 +815,25 @@ SPI_IMPLEMENT_ATTACH
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to hook GameEngineTick: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+
+	/*if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&ExecHandler), "48 8b c4 48 89 50 10 55 56 57 41 54 41 55 41 56 41 57 48 8d a8 d8 fe ff ff");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find ExecHandler pattern: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+	if (const auto rc = InterfacePtr->InstallHook(SLHHOOK "ExecHandler", ExecHandler, ExecHandler_hook, reinterpret_cast<void**>(&ExecHandler_orig));
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook ExecHandler: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}*/
+	if (auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&CallFunction), "40 55 53 56 57 41 54 41 55 41 56 41 57 48 81 EC A8 04 00 00 48 8D 6C 24 20 48 C7 45 68 FE FF FF FF");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find CallFunction pattern: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
 
@@ -745,21 +848,22 @@ SPI_IMPLEMENT_ATTACH
 	{
 		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
 		return false;
-	}
-
-
-	if (auto rc = InterfacePtr->FindPattern((void**)&CallFunction, "40 55 53 56 57 41 54 41 55 41 56 41 57 48 81 EC A8 04 00 00 48 8D 6C 24 20 48 C7 45 68 FE FF FF FF");
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to find CallFunction pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
-	if (auto rc = InterfacePtr->InstallHook(SLHHOOK "CallFunction", CallFunction, CallFunction_hook, (void**)&CallFunction_orig);
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
-		return false;
 	}*/
+
+
+
+	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&SetLinker), "4c 8b 51 2c 4c 8b c9 4d 85 d2 74 39 48 85 d2 74 1c 48 8b c1");
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to find SetLinker pattern: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
+	if (const auto rc = InterfacePtr->InstallHook(SLHHOOK "SetLinker", SetLinker, SetLinker_hook, reinterpret_cast<void**>(&SetLinker_orig));
+		rc != SPIReturn::Success)
+	{
+		writeln(L"Attach - failed to hook SetLinker: %d / %s", rc, SPIReturnToString(rc));
+		return false;
+	}
 
 	//Good test function
 	/*

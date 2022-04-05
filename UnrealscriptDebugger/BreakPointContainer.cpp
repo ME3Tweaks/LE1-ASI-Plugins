@@ -36,7 +36,7 @@ void BreakPointContainer::AddBreakPoint(const std::string& funcPath, unsigned sh
 
 	if (const auto pair = BreakpointMap.find(funcPath); pair != BreakpointMap.end())
 	{
-		auto breakPoints = pair->second;
+		auto& breakPoints = pair->second;
 		breakPoints.insert(location);
 	}
 	else
