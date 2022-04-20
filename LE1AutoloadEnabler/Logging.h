@@ -55,4 +55,4 @@ CompileTimeSelectedStreamProvider GLogStreamProvider;
 
 #define initLog()           GLogStreamProvider.Initialize();
 #define closeLog()          GLogStreamProvider.Wrapup();
-#define writeln(msg,...)    fwprintf_s(GLogStreamProvider.Stream(), L"LENE::" msg "\n", __VA_ARGS__);
+#define writeln(msg,...)    fwprintf_s(GLogStreamProvider.Stream(), msg "\n", __VA_ARGS__);

@@ -19,9 +19,11 @@ constexpr bool GIsRelease = false;
 constexpr bool GIsRelease = true;
 #endif
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.4.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.5.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_SEQATTACH;
+
+bool ContentScanComplete = false;
 
 // Fixes bad launcher logic when not using Autoboot (sets the wrong working directory)
 void SetWorkingDirectory() {
@@ -217,6 +219,17 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 	if (firstLoad)
 	{
 		firstLoad = false;
+
+		// Wait up to 5 seconds.
+		int i = 5;
+		while (i > 0 && !ContentScanComplete)
+		{
+			writeln(L"Waiting for content scan to complete...");
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+			i--;
+		}
+
+		writeln(L"Performing TFC registration");
 		for each (auto tfcPath in DLCTFCsToRegister)
 		{
 			RegisterTFCWrapper(tfcPath);
@@ -264,7 +277,7 @@ SPI_IMPLEMENT_ATTACH
 	INIT_HOOK_PATTERN(ProcessIni);
 
 	// Get a list of DLC Autoloads.
-	writeln("Finding DLC content...");
+	writeln(L"Finding DLC content...");
 	for (const auto& autoload : GetAllDLCAutoloads(GetDLCsRoot()))
 	{
 		writeln(L"Found DLC Autoload.ini: %s", autoload.c_str());
@@ -298,7 +311,8 @@ SPI_IMPLEMENT_ATTACH
 			}
 		}
 	}
-	writeln("Completed DLC content detection");
+	ContentScanComplete = true;
+	writeln(L"Completed DLC content detection");
 	return true;
 }
 
