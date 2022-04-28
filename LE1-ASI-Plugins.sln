@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31911.196
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32421.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1ASITemplate", "LE1ASITemplate\LE1ASITemplate.vcxproj", "{A0D8B7E4-D7DA-43FF-AEE1-08C9103B2E18}"
 EndProject
@@ -32,6 +32,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1AppearanceTest", "LE1AppearanceTest\LE1AppearanceTest.vcxproj", "{F334D9C9-36B2-4D64-A052-E1C13E322A23}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1AutoloadEnabler", "LE1AutoloadEnabler\LE1AutoloadEnabler.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108199544}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LinkerPrinter", "LinkerPrinter\LinkerPrinter.vcxproj", "{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -139,6 +141,14 @@ Global
 		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x64.ActiveCfg = Release|x64
 		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x64.Build.0 = Release|x64
 		{C0B3993D-89FD-43D0-B1E3-B8A108199544}.Release|x86.ActiveCfg = Release|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Debug|x64.ActiveCfg = Debug|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Debug|x64.Build.0 = Debug|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Debug|x86.ActiveCfg = Debug|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Debug|x86.Build.0 = Debug|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Release|x64.ActiveCfg = Release|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Release|x64.Build.0 = Release|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Release|x86.ActiveCfg = Release|x64
+		{8298E95F-DEAD-440D-B9E6-7B7BC0DF2FE4}.Release|x86.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
