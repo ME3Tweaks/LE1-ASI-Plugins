@@ -102,7 +102,7 @@ SPI_IMPLEMENT_ATTACH
 		return false;
 	}
 
-	writeln("LinkerPriner: Press CTRL + O to dump all objects that have laoded and their source.");
+	writeln("LinkerPriner: Press CTRL + O to dump all objects that have loaded and their source.");
 	return true;
 }
 
