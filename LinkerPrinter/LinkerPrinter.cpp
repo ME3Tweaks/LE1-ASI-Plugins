@@ -85,19 +85,13 @@ SPI_IMPLEMENT_ATTACH
 
 	auto _ = SDKInitializer::Instance();
 
-	if (const auto rc = InterfacePtr->FindPattern(reinterpret_cast<void**>(&SetLinker), "4c 8b 51 2c 4c 8b c9 4d 85 d2 74 39 48 85 d2 74 1c 48 8b c1");
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to find SetLinker pattern: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
+	INIT_FIND_PATTERN_POSTHOOK(SetLinker, /*"4c 8b 51 2c 4c"*/ "8b c9 4d 85 d2 74 39 48 85 d2 74 1c 48 8b c1");
 	if (const auto rc = InterfacePtr->InstallHook(MYHOOK "SetLinker", SetLinker, SetLinker_hook, reinterpret_cast<void**>(&SetLinker_orig));
 		rc != SPIReturn::Success)
 	{
 		writeln(L"Attach - failed to hook SetLinker: %d / %s", rc, SPIReturnToString(rc));
 		return false;
 	}
-
 
 	// Hook ProcessEvent for input combo
 	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
