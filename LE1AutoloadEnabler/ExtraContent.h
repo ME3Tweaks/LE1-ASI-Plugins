@@ -36,16 +36,22 @@ public:
     struct TArray<struct FString> Package2DAs;
     struct TArray<struct FString> GlobalTlks;
     struct TArray<struct FString> PlotManagers;
-    struct TArray<struct FString> EmptyArray1;  // Always empty?  TODO: add a check
+    struct TArray<struct FString> GlobalPackages;
     struct TArray<struct FString> StateTransitionMaps;
     struct TArray<struct FString> ConsequenceMaps;
     struct TArray<struct FString> OutcomeMaps;
     struct TArray<struct FString> QuestMaps;
     struct TArray<struct FString> DataCodexMaps;
     struct TArray<struct FString> BioAutoConditionals;
-    struct TArray<class UObject*> SomePackages;
+    struct TArray<class UPackage*> LoadedPackages; // Populated after InstallDownloadableContent() has run (which contains ProcessIni)
 
     // Probably has some other stuff here too?
+
+    // For sure from decomp:
+    // ArmorMale
+    // ArmorFemale
+    // HeadGearMale
+    // HeadGearFemale
 };
 
 
@@ -96,7 +102,7 @@ private:
         column_++;
     }
 
-    void drawColumn_(const wchar_t* name, TArray<UObject*>* arr)
+    void drawColumn_(const wchar_t* name, TArray<UPackage*>* arr)
     {
         canvas_->SetPos(start_.X + columnSize_ * column_, start_.Y + 50.f + (rowSize_ * row_));
         canvas_->SetDrawColor(UNPACK_BGRA(colorSubheader_));
@@ -186,7 +192,7 @@ private:
         drawColumn_(L"QuestMaps", &extraContent_->QuestMaps);
         drawColumn_(L"DataCodexMaps", &extraContent_->DataCodexMaps);
         drawColumn_(L"BioAutoConditionals", &extraContent_->BioAutoConditionals);
-        drawColumn_(L"LoadedPackages", &extraContent_->SomePackages);
+        drawColumn_(L"LoadedPackages", & extraContent_->LoadedPackages);
     }
 
 public:
