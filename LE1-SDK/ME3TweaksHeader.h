@@ -75,6 +75,26 @@ UObject* FindObjectOfType(UClass* type)
 	return NULL;
 }
 
+/// <summary>
+/// Searches for an object with the exact name.
+/// </summary>
+///	<param name="FullName">The full name of the object to find</param>
+/// <returns>First found object, null otherwise</returns>
+UObject* FindNamedObject(const char* FullName)
+{
+	const auto objCount = UObject::GObjObjects()->Count;
+	const auto objArray = UObject::GObjObjects()->Data;
+	for (auto j = 0; j < objCount; j++)
+	{
+		auto obj = objArray[j];
+		if (obj && strcmpi(obj->GetFullName(), FullName) == true)
+		{
+			return obj;
+		}
+	}
+	return NULL;
+}
+
 std::string GuidToString(FGuid guid)
 {
 	char guid_cstr[39];
