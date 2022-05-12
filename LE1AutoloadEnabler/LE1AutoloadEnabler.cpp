@@ -105,13 +105,12 @@ bool GOriginalCalled = false;
 ExtraContent* GExtraContent = nullptr;
 std::vector<std::wstring> GExtraAutoloadPaths{};
 
-// NI: The first param is actually a class pointer.
+// NI: The first param is actually a 'this' pointer.
 typedef void (*tProcessIni)(ExtraContent* ExtraContent, FString* IniPath, FString* BasePath);
 tProcessIni ProcessIni = nullptr;
 tProcessIni ProcessIni_orig = nullptr;
 void ProcessIni_hook(ExtraContent* ExtraContent, FString* IniPath, FString* BasePath)
 {
-	writeln(L"Registering DLC mod Autoload.ini %s", IniPath->Data);
 	ProcessIni_orig(ExtraContent, IniPath, BasePath);
 
 	if (!GOriginalCalled)
@@ -119,13 +118,95 @@ void ProcessIni_hook(ExtraContent* ExtraContent, FString* IniPath, FString* Base
 		GOriginalCalled = true;
 		for (const auto& autoloadPath : GExtraAutoloadPaths)
 		{
+			writeln(L"Registering DLC mod Autoload.ini %s", IniPath->Data);
 			ProcessIni(ExtraContent, &FString{ const_cast<wchar_t*>(autoloadPath.c_str()) }, nullptr);
 		}
 		GExtraContent = ExtraContent;
 	}
 }
 
+// Sets the RF_Root flag, as part of making object startup
+typedef void (*tUObjectRoot)(UObject* callingObject);
+tUObjectRoot RootObject = nullptr; // We aren't hooking this, we just need to call it.
 
+// Marks all objects as RF_Root that have a outermost outer that is the same as the listed
+// UPackage (which means they are from this package)
+void RegisterStartupFile(UPackage* package)
+{
+	writeln(L"Registering startup file: %hs", package->Name.GetName());
+
+	auto GObjects = SDKInitializer::Instance()->GetObjects();
+	for (int i = 0; i < GObjects->Count; i++)
+	{
+		auto obj = GObjects->Data[i];
+		if (obj && obj->Outer)
+		{
+			// Must not be null and must have an outer (otherwise it's already an object at the root of the heirarchy, which should already be rooted... in theory...)
+			UObject* outerMost = obj;
+			while (outerMost->Outer != nullptr)
+			{
+				outerMost = outerMost->Outer; // Go to it's nullptr
+			}
+
+			if (outerMost == package)
+			{
+				// It's a child of this package!
+				//writeln(L"Rooting startup package object %hs in package %hs", obj->GetFullName(), package->Name.GetName())
+				RootObject(obj);
+			}
+		}
+	}
+}
+// The lazy way
+static std::wstring charToWString(const char* text)
+{
+	const size_t size = std::strlen(text);
+	std::wstring wstr;
+	if (size > 0) {
+		wstr.resize(size);
+		std::mbstowcs(&wstr[0], text, size);
+	}
+	return wstr;
+}
+
+// =====================
+// InstallDownloadableContent()
+// This method calls ProcessIni() to read the Inis and populate the 'ExtraContent' class object.
+// This method then loads packages based on what it read in (2DAs, etc)
+// This hook marks objects that load from items in the GlobalPackages array as rooted so they don't GC
+// This makes them behave like startup files in LE2/LE3 do
+// =====================
+typedef void (*tInstallDownloadableContent)(void* unk);
+tInstallDownloadableContent InstallDownloadableContent = nullptr;
+tInstallDownloadableContent InstallDownloadableContent_orig = nullptr;
+void InstallDownloadableContent_hook(void* unk)
+{
+	InstallDownloadableContent_orig(unk);
+	for (int i = 0; i < GExtraContent->GlobalPackages.Count; i++)
+	{
+		auto globalPackageName = GExtraContent->GlobalPackages.Data[i];
+		// Find it in the GExtraContent loaded packages
+		UPackage* loadedPackage = nullptr;
+		for (int j = 0; j < GExtraContent->LoadedPackages.Count; j++)
+		{
+			auto package = (UPackage*)GExtraContent->LoadedPackages.Data[j];
+			auto name = package->Name.GetName();
+			auto globalName = globalPackageName.Data;
+			auto isSameName = _wcsicmp(charToWString(package->Name.GetName()).c_str(), globalPackageName.Data) == 0;
+			if (package && isSameName)
+			{
+				// It's a match
+				RegisterStartupFile(package);
+				break; // Go to the next one
+			}
+		}
+
+		auto suf = GExtraContent->GlobalPackages.Data[i];
+
+		//RegisterStartupFile(suf); // Have to convert this to it somehow...
+
+	}
+}
 
 // ======================================================================
 // ProcessEvent hook
@@ -255,7 +336,7 @@ SPI_IMPLEMENT_ATTACH
 	// Leftover for documentation sake.
 	// We need to find 'Has at least one TFC' which I think means TFC manager has loaded...
 	//INIT_FIND_PATTERN_POSTHOOK(HasAtLeastOneBasegameTFC, /* 8b 0d aa a6 50 */ "01 33 c0 2b 0d ce a6 50 01 85 c9 0f 9f c0 c3"); // dunno if this is long enough
-	
+
 	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
 	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
 
@@ -263,18 +344,11 @@ SPI_IMPLEMENT_ATTACH
 	INIT_FIND_PATTERN_POSTHOOK(SomethingFirstLoad, /*48 8b c4 56 57*/ "41 54 41 56 41 57 48 83 ec 50 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 4d 8b f0 48 8b f2");
 	INIT_HOOK_PATTERN(SomethingFirstLoad);
 
-	#ifndef NDEBUG
 	// Initialize the SDK because we need object names.
 	INIT_CHECK_SDK();
 
-	// Hook ProcessEvent for debugging.
-	INIT_FIND_PATTERN(ProcessEvent, "40 55 41 56 41 57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
-	INIT_HOOK_PATTERN(ProcessEvent);
-	#endif
-
-	// Find and hook the ProcessIni for Autoload.ini support
-	INIT_FIND_PATTERN(ProcessIni, "40 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");
-	INIT_HOOK_PATTERN(ProcessIni);
+	// This is done first cause it's kind of important that it's done early so changes to things like
+	// BIOC_Materials work
 
 	// Get a list of DLC Autoloads.
 	writeln(L"Finding DLC content...");
@@ -313,6 +387,28 @@ SPI_IMPLEMENT_ATTACH
 	}
 	ContentScanComplete = true;
 	writeln(L"Completed DLC content detection");
+
+	// Hook stuff that won't be needed until like 10-15 seconds into the game
+
+	// Hook ProcessEvent for debugging.
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT);
+	INIT_HOOK_PATTERN(ProcessEvent);
+
+	// Find and hook the ProcessIni for Autoload.ini support
+	INIT_FIND_PATTERN_POSTHOOK(ProcessIni, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");
+	INIT_HOOK_PATTERN(ProcessIni);
+
+	INIT_FIND_PATTERN_POSTHOOK(InstallDownloadableContent, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 98 fe ff ff 48 81 ec 40 02 00 00 48 c7 45 18 fe ff ff ff");
+	INIT_HOOK_PATTERN(InstallDownloadableContent);
+
+	// OBJECT ROOTING FOR STARTUP FILE OBJECTS
+	// NOTE: THIS POINTS TO A FUNCTION FOLLOWING BY 0X10 AS THE FUNC IS TOO SMALL TO FIND BY SIGNATURE
+	INIT_FIND_PATTERN_POSTHOOK(RootObject, /*"40 55 48 8b ec*/"48 83 ec 50 48 c7 45 e0 fe ff ff ff 48 89 5c 24 60");
+	//writeln("RootObject currently at 0x%p", RootObject);
+	RootObject = (tUObjectRoot)((char*)RootObject - 0x10);
+	//writeln("Actual RootObject is at 0x%p", RootObject);
+
+
 	return true;
 }
 
