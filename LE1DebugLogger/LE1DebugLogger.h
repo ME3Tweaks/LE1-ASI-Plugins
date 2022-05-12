@@ -26,9 +26,6 @@ struct BioSystem
 	FString ScreenshotPath; // 0xAC
 	TArray<FString> Paths; // 0xBC
 	TArray<FString> ScriptPaths; //?
-
-
-
 };
 
 #define GSysAddress 0x7ff713726760;
