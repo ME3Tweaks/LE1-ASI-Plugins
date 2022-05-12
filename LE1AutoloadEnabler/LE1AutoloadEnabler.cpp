@@ -382,9 +382,11 @@ SPI_IMPLEMENT_ATTACH
 
 	// Hook stuff that won't be needed until like 10-15 seconds into the game
 
+#if !NDEBUG
 	// Hook ProcessEvent for debugging.
 	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT);
 	INIT_HOOK_PATTERN(ProcessEvent);
+#endif
 
 	// Find and hook the ProcessIni for Autoload.ini support
 	INIT_FIND_PATTERN_POSTHOOK(ProcessIni, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");

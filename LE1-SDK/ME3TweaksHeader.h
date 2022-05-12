@@ -87,7 +87,7 @@ UObject* FindNamedObject(const char* FullName)
 	for (auto j = 0; j < objCount; j++)
 	{
 		auto obj = objArray[j];
-		if (obj && strcmpi(obj->GetFullName(), FullName) == 0)
+		if (obj && _strcmpi(obj->GetFullName(), FullName) == 0)
 		{
 			return obj;
 		}
