@@ -186,12 +186,9 @@ void InstallDownloadableContent_hook(void* unk)
 	{
 		auto globalPackageName = GExtraContent->GlobalPackages.Data[i];
 		// Find it in the GExtraContent loaded packages
-		UPackage* loadedPackage = nullptr;
 		for (int j = 0; j < GExtraContent->LoadedPackages.Count; j++)
 		{
-			auto package = (UPackage*)GExtraContent->LoadedPackages.Data[j];
-			auto name = package->Name.GetName();
-			auto globalName = globalPackageName.Data;
+			auto package = GExtraContent->LoadedPackages.Data[j];
 			auto isSameName = _wcsicmp(charToWString(package->Name.GetName()).c_str(), globalPackageName.Data) == 0;
 			if (package && isSameName)
 			{
@@ -200,11 +197,6 @@ void InstallDownloadableContent_hook(void* unk)
 				break; // Go to the next one
 			}
 		}
-
-		auto suf = GExtraContent->GlobalPackages.Data[i];
-
-		//RegisterStartupFile(suf); // Have to convert this to it somehow...
-
 	}
 }
 
