@@ -13,7 +13,7 @@
 
 #define MYHOOK "LinkerPrinter_"
 
-SPI_PLUGINSIDE_SUPPORT(L"LinkerPrinter", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"LinkerPrinter", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
@@ -52,12 +52,72 @@ tProcessEvent ProcessEvent_orig = nullptr;
 void PrintLinkers()
 {
 	CanPrint = false;
+	writeln("Dumping %llu linkers, this may take a while (game will be unresponsive)...", NodePathToFileNameMap.size());
+
+	// Create a map of Objects to their names (in reverse), otherwise we take a huge performance hit when objects got dumped. 
+	// Then we have N build time and then O(1) lookup time instead of N^2
+
+	map<std::string, UObject*> ObjectNameToObjectMap;
+
+	const auto objCount = UObject::GObjObjects()->Count;
+	const auto objArray = UObject::GObjObjects()->Data;
+	for (auto j = 0; j < objCount; j++)
+	{
+		auto obj = objArray[j];
+		if (obj) {
+			ObjectNameToObjectMap.insert_or_assign(std::string(obj->GetFullPath()), obj);
+		}
+	}
+
+	cout << "0 done";
+	long numDone = 0;
 	wchar_t buffer[1024];
 	for (auto const& [key, val] : NodePathToFileNameMap)
 	{
-		swprintf(buffer, 1024, L"%hs -> %s\n", key.c_str(), val.c_str());
+		if (numDone % 1000 == 0)
+		{
+			cout << "\r" << numDone << " done";
+		}
+
+		if (ObjectNameToObjectMap.find(key) == ObjectNameToObjectMap.end())
+		{
+			// Not found
+			swprintf(buffer, 1024, L"%hs -> (Dumped from memory)\n", key.c_str());
+		}
+		else
+		{
+			swprintf(buffer, 1024, L"%hs -> %s\n", key.c_str(), val.c_str());
+		}
+
 		logger.writeWideToLog(buffer);
+		numDone++;
 	}
+
+	// Iterate over objects and find them in our node map.
+	//cout << "0 done";
+	//wchar_t buffer[1024];
+
+	//const auto objCount = UObject::GObjObjects()->Count;
+	//const auto objArray = UObject::GObjObjects()->Data;
+	//for (auto j = 0; j < objCount; j++)
+	//{
+	//	if (j % 1000 == 0)
+	//	{
+	//		cout << "\r" << j << " done";
+	//	}
+	//	auto obj = objArray[j];
+	//	if (obj) {
+	//		const char* fullName = obj->GetFullName();
+	//		if (NodePathToFileNameMap.find(fullName) == NodePathToFileNameMap.end()) {
+	//			// Doesn't exist
+	//		}
+	//		else {
+	//			// Exists
+	//		}
+	//	}
+	//}
+
+	cout << "\rPrinted linker source of " << numDone << " objects\n";
 	logger.writeWideLineToLog(L"------------------------------");
 	CanPrint = true;
 }
