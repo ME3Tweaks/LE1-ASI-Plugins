@@ -48,24 +48,24 @@
 # ========================================================================================= #
 */
 
-template< class T > struct TArray 
-{ 
-public: 
-	T* Data; 
-	int Count; 
-	int Max; 
+template< class T > struct TArray
+{
+public:
+	T* Data;
+	int Count;
+	int Max;
 
-public: 
-	TArray() 
-	{ 
-		Data = NULL; 
-		Count = Max = 0; 
-	}; 
+public:
+	TArray()
+	{
+		Data = NULL;
+		Count = Max = 0;
+	};
 
-public: 
-	int Num() 
-	{ 
-		return this->Count; 
+public:
+	int Num()
+	{
+		return this->Count;
 	};
 
 	bool Any()
@@ -77,22 +77,22 @@ public:
 	/// Do not use this on TArrays you don't create yourself, as the Unreal allocator won't work with them.
 	/// </summary>
 	/// <param name="InputData"></param>
-	void Add ( T InputData ) 
+	void Add(T InputData)
 	{
 		if (Count >= Max)
 		{
-			Max = Count + 3*Count/8 + 16;
+			Max = Count + 3 * Count / 8 + 16;
 			Data = (T*)realloc(Data, sizeof(T) * Max);
 		}
 		Data[Count++] = InputData;
-	}; 
+	};
 
-	const T& operator() ( int i ) const 
-	{ 
-		return this->Data[ i ]; 
-	}; 
+	const T& operator() (int i) const
+	{
+		return this->Data[i];
+	};
 
-}; 
+};
 
 /** Packed index DWORD as seen in FNameEntry. */
 struct PackedIndex
@@ -102,14 +102,38 @@ struct PackedIndex
 	DWORD Bits : 3;     // Always 4 or 0. No idea wtf it really is, flags maybe?
 };
 
+// ----------------------------------------------------------------
+// FNameEntry bitmasks
+// ----------------------------------------------------------------
+
+const UINT    NAMEENTRY_CONST = 0x80000000;
+const UINT    NAMEENTRY_UNICODE = 0x40000000;
+const UINT    NAMEENTRY_ANSI = 0x00000000;
+const UINT    NAMEENTRY_LOGSUPPRESSED = 0x20000000;
+const UINT    NAMEENTRY_UPPERHASH_BITS = 32 - 3; // Length is 9 bits, so 512 is max length
+const UINT    NAMEENTRY_UPPERHASH_MASK = (1 << NAMEENTRY_UPPERHASH_BITS) - 1;
+const UINT    NAMEENTRY_LENGTH_MASK = (512 - 1) << NAMEENTRY_UPPERHASH_BITS;
+const UINT    NAMEENTRY_LENGTH_SHIFT = NAMEENTRY_UPPERHASH_BITS;
+const UINT    NAMEENTRY_COMPARE_MASK = 0x5fffffff;
+
 #pragma pack(1)
 /** Name as seen in some kind of name pool. */
 struct FNameEntry
 {
-	PackedIndex Index;     // 0x00
+	UINT FlagsAndMeta;     // 0x00
 	FNameEntry* HashNext;  // 0x04  Some pointer, often NULL.
-	char AnsiName[1];      // 0x0C  This *potentially* can be a widechar.
+	union
+	{
+		char AnsiName[512];
+		wchar_t UniName[512]; // 512 is max NAME_SIZE, according to d00t's PackedIndex of Length 2^9
+	};
+
+	FORCEINLINE bool IsUnicode() const
+	{
+		return this != NULL && (FlagsAndMeta & NAMEENTRY_UNICODE) != 0;
+	}
 };
+
 
 #pragma pack(1)
 /** Name reference as seen in individual UObjects. */
@@ -121,7 +145,7 @@ struct FName
 
 	__forceinline char* GetName() const noexcept
 	{
-		auto chunk = SDKInitializer::Instance()->GetBioNamePools()[Chunk]; 
+		auto chunk = SDKInitializer::Instance()->GetBioNamePools()[Chunk];
 		auto entry = (FNameEntry*)((BYTE*)chunk + Offset);
 		return entry->AnsiName;
 	}
@@ -131,7 +155,15 @@ struct FName
 		return Offset == A.Offset && Chunk == A.Chunk && Number == A.Number;
 	}
 
+	// This is not reliable for "None"
+	static INT GetNameLength(const FNameEntry* Entry)
+	{
+		// NULL = "None"
+		return Entry == NULL ? 4 : (Entry->FlagsAndMeta & NAMEENTRY_LENGTH_MASK) >> NAMEENTRY_LENGTH_SHIFT;
+	}
+
 	/** IDK if this actually works yet. */
+	// Should use in-game FName constructor instead, it'll be way more reliable.
 	static bool TryFind(char* lookup, signed long instance, FName* outName)
 	{
 		auto gBioNamePools = SDKInitializer::Instance()->GetBioNamePools();
@@ -141,23 +173,24 @@ struct FName
 			namePool++)
 		{
 			for (FNameEntry* nameEntry = *namePool;
-				nameEntry->Index.Length != 0;
-				nameEntry = reinterpret_cast<FNameEntry*>(reinterpret_cast<BYTE*>(nameEntry) + sizeof FNameEntry + nameEntry->Index.Length))
+				(nameEntry->FlagsAndMeta & NAMEENTRY_LENGTH_MASK) != 0;
+				nameEntry = reinterpret_cast<FNameEntry*>(reinterpret_cast<BYTE*>(nameEntry) + sizeof FNameEntry + GetNameLength(nameEntry)))
 			{
 				if (!strcmp(lookup, nameEntry->AnsiName))
 				{
 					FName name{};
-					name.Offset = (DWORD)((unsigned long long)nameEntry - (unsigned long long)namePool);
-					name.Chunk = (DWORD)((unsigned long long)namePool - (unsigned long long)gBioNamePools);
-					name.Number = instance;
-					*outName = name;
-					return true;
+						name.Offset = (DWORD)((unsigned long long)nameEntry - (unsigned long long)namePool);
+						name.Chunk = (DWORD)((unsigned long long)namePool - (unsigned long long)gBioNamePools);
+						name.Number = instance;
+						*outName = name;
+						return true;
 				}
 			}
 		}
 		outName = nullptr;
 		return false;
 	}
+
 
 	char* Instanced()
 	{
@@ -175,37 +208,37 @@ struct FName
 	}
 };
 
-struct FString : public TArray<wchar_t>  { 
-	FString() {}; 
+struct FString : public TArray<wchar_t> {
+	FString() {};
 
-	FString ( wchar_t* Other ) 
-	{ 
-		this->Max = this->Count = *Other ? ( wcslen ( Other ) + 1 ) : 0; 
+	FString(wchar_t* Other)
+	{
+		this->Max = this->Count = *Other ? (wcslen(Other) + 1) : 0;
 
-		if ( this->Count ) 
-			this->Data = Other; 
-	}; 
-
-	~FString() {}; 
-
-	FString operator = ( wchar_t* Other ) 
-	{ 
-		if ( this->Data != Other ) 
-		{ 
-			this->Max = this->Count = *Other ? ( wcslen ( Other ) + 1 ) : 0; 
-
-			if ( this->Count ) 
-				this->Data = Other; 
-		} 
-
-		return *this; 
+		if (this->Count)
+			this->Data = Other;
 	};
-}; 
 
-struct FScriptDelegate 
-{ 
-	class UObject*		Object; 
-	struct FName		FunctionName; 
+	~FString() {};
+
+	FString operator = (wchar_t* Other)
+	{
+		if (this->Data != Other)
+		{
+			this->Max = this->Count = *Other ? (wcslen(Other) + 1) : 0;
+
+			if (this->Count)
+				this->Data = Other;
+		}
+
+		return *this;
+	};
+};
+
+struct FScriptDelegate
+{
+	class UObject*		Object;
+	struct FName		FunctionName;
 };
 
 struct FScriptInterface
