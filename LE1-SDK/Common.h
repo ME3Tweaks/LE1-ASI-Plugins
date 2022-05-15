@@ -161,4 +161,9 @@ namespace Common
 // =====================================================
 
 /// Post-Signature for hooking ProcessEvent. Works on LE1/LE2/LE3.
+
+// Pattern for hooking ProcessEvent
 #define LE_PATTERN_POSTHOOK_PROCESSEVENT   /*"40 55 41 56 41*/ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20 48 C7 45 50 FE FF FF FF 48 89 9D 90 00 00 00 48 89 B5 98 00 00 00 48 89 BD A0 00 00 00 4C 89 A5 A8 00 00 00 48 8B"
+
+// Pattern for hooking the constructor function for an FName/SFXName
+#define LE1_PATTERN_POSTHOOK_SFXNAMECONSTRUCTOR   /*40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00"

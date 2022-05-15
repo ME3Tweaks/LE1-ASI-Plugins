@@ -27,6 +27,8 @@ HANDLE hPipe;
 LPOVERLAPPED pipeOverlap;
 bool playerGPSActive;
 
+ISharedProxyInterface* SPIInterfacePtr;
+
 optional<std::wstring> pendingConsoleCommand;
 
 char* GetUObjectClassName(UObject* object)
@@ -322,15 +324,15 @@ tProcessEvent ProcessEvent_orig = nullptr;
 void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
 	const auto className = Context->Class->Name.GetName();
-	if (!strcmp(className, "SeqAct_SendMessageToLEX"))
+	if (strcmp(className, "SeqAct_SendMessageToLEX") == 0)
 	{
-		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		if (strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated") == 0)
 		{
 			const auto op = static_cast<USequenceOp*>(Context);
 			SendMessageToLEX(op);
 		}
 	}
-	else if (!strcmp(className, "SeqAct_LEXDumpActors"))
+	else if (strcmp(className, "SeqAct_LEXDumpActors") == 0)
 	{
 		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
 		{
@@ -338,7 +340,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 			DumpActors(op);
 		}
 	}
-	else if (!strcmp(className, "SeqAct_LEXAccessDumpedActorsList"))
+	else if (strcmp(className, "SeqAct_LEXAccessDumpedActorsList") == 0)
 	{
 		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
 		{
@@ -346,9 +348,9 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 			AccessDumpedActorsList(op);
 		}
 	}
-	else if (!strcmp(className, "SeqAct_LEXGetPlayerCamPOV"))
+	else if (strcmp(className, "SeqAct_LEXGetPlayerCamPOV") == 0)
 	{
-		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+		if (strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated") == 0)
 		{
 			const auto op = static_cast<USequenceOp*>(Context);
 			GetCamPOV(op);
@@ -399,6 +401,22 @@ char* substr(char* arr, int begin, int len)
 	return res;
 }
 
+typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
+tSFXNameConstructor sfxNameConstructor = nullptr;
+
+BOOL CreateName(const wchar_t* name, int number, FName* outName)
+{
+	if (sfxNameConstructor == nullptr)
+	{
+		// This is so we can use the macro for slightly cleaner code.
+		auto InterfacePtr = SPIInterfacePtr;
+		INIT_FIND_PATTERN_POSTHOOK(sfxNameConstructor, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00 48 8b 05 fd 2d 5d 01 48 33 c4 48 89 84 24 f0 06 00 00");
+	}
+
+	sfxNameConstructor(outName, name, number, TRUE, 0);
+	return TRUE;
+}
+
 void ProcessCommand(char str[1024], DWORD dword)
 {
 	writeln("Received command:");
@@ -407,10 +425,24 @@ void ProcessCommand(char str[1024], DWORD dword)
 	if (strcmp(str, "ACTIVATE_PLAYERGPS\r\n") == 0)
 	{
 		playerGPSActive = true;
+		FName name;
+		CreateName(L"LEX_GPS", 0, &name);
 	}
 	else if (strcmp(str, "DEACTIVATE_PLAYERGPS\r\n") == 0)
 	{
 		playerGPSActive = false;
+	}
+	else if (strcmp(str, "MGAMERZ_TEST\r\n") == 0)
+	{
+		// This is TEST code
+		auto cheetahmen = FindObjectOfType(UBioCheatManager::StaticClass());
+		if (cheetahmen)
+		{
+			auto cheetah = reinterpret_cast<UBioCheatManager*>(cheetahmen);
+			FName levelName;
+			CreateName(L"BIOA_LAV60_00_LAY", 0, &levelName);
+			cheetah->StreamLevelIn(levelName);
+		}
 	}
 	else if (startsWith("CAUSEEVENT ", str))
 	{
@@ -420,7 +452,7 @@ void ProcessCommand(char str[1024], DWORD dword)
 		if (bioWorldInfo)
 		{
 			FName foundName;
-			if (FName::TryFind(eventName, 0, &foundName))
+			if (CreateName(s2ws(eventName).c_str(), 0, &foundName))
 			{
 				auto localPlayerController = bioWorldInfo->GetLocalPlayerController();
 				if (localPlayerController) {
@@ -428,11 +460,13 @@ void ProcessCommand(char str[1024], DWORD dword)
 					ss << "ce " << eventName;
 					pendingConsoleCommand.emplace(ss.str());
 				}
-			} else
+			}
+			else
 			{
 				writeln("Name not found");
 			}
-		} else
+		}
+		else
 		{
 			writeln("No BioWorldInfo");
 		}
@@ -446,14 +480,11 @@ SPI_IMPLEMENT_ATTACH
 
 	auto _ = SDKInitializer::Instance();
 
-	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	// Cache the pointer so we can install a hook later (if needed)
+	SPIInterfacePtr = InterfacePtr;
 
-	if (auto rc = InterfacePtr->InstallHook(MYHOOK "ProcessEvent", ProcessEvent, ProcessEvent_hook, (void**)&ProcessEvent_orig);
-		rc != SPIReturn::Success)
-	{
-		writeln(L"Attach - failed to hook ProcessEvent: %d / %s", rc, SPIReturnToString(rc));
-		return false;
-	}
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	INIT_HOOK_PATTERN(ProcessEvent);
 
 	// MGAMERZ PIPIN'
 	char buffer[1024];
