@@ -204,6 +204,81 @@ void sfxNameConstructor_hook(unsigned int* outIndex, wchar_t* nameValue, int nam
 	writeln("Name lookup: %i %s %i %i %i", *outIndex, nameValue, nameNumber, parm4, parm5);
 }
 
+void* GetBioEventNotifier()
+{
+	if (GWorld != nullptr)
+	{
+		auto something1 = *(int64*)((int64*)(GWorld)+0x88);
+		auto something2 = **(int64**)(something1 + 0x60);
+		auto bioEventNotifier = *(int64*)(something2 + 0xb8c);
+		return (void*)bioEventNotifier;
+	}
+}
+
+void LoadSlider2DA_hook(void* parm1)
+{
+	LoadSlider2DA_orig(parm1);
+}
+
+void* GetBioWorldInfo()
+{
+	// Doesn't work!
+	/*if (GWorld)
+	{
+		return GWorld->CurrentLevel1->Actors.Data[0];
+	}*/
+	return nullptr;
+}
+
+void EventNotifierAddNotice_hook(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
+	INT stringRefTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax)
+{
+	// GetBioWorldInfo doesn't work. We have to use ghidra offsets, not rely on VC++ since
+	// compiler might change offsets of our compiled classes
+	auto bwi = GetBioWorldInfo();
+	auto eventNotifier = *(int64*)((int64)bwi + 0xb8c); //calculates a pointer, and dereferences it.
+	EventNotifierAddNotice_orig(bioEventNotifier, nType, nContext, nTimeToLive, nIconIndex, /*stringRefTitle*/157152, strTitle, nQuantity, nQuantMin, nQuantMax);
+}
+
+void logAllocationFailure(UClass* instancingClass, UObject* outer, FName objClassName, long long loadFlags, UObject* archetype) {
+	char* instancingClassName = instancingClass ? instancingClass->GetFullName() : nullptr;
+	char* outerName = outer ? outer->GetFullName() : nullptr;
+	char* objectName = objClassName.Instanced();
+	char* archetypeName = archetype ? archetype->GetFullName() : nullptr;
+	logger.writeWideLineToLog(L"Error allocating object. Some information that may help track down the problem:");
+	logger.writeWideLineToLog(wstring_format(L"\tInstancing class name: %hs", instancingClassName));
+	logger.writeWideLineToLog(wstring_format(L"\tOuter ('Link' in modding tools): %hs", outerName));
+	logger.writeWideLineToLog(wstring_format(L"\tName of object being created: %hs", objectName));
+	logger.writeWideLineToLog(wstring_format(L"\tArchetype: %hs", archetypeName));
+
+	logger.writeWideLineToLog(L"DebugLogger: Terminating application due to crash in StaticAllocateObject()");
+}
+
+UObject* StaticAllocateObject_hook(
+	UClass* instancingClass,
+	UObject* outer,
+	FName objClassName,
+	long long loadFlags,
+	UObject* archetype, 
+	void* errorDev, // FOutputDevice
+	const wchar_t* a7, // Ghidra shows this is pretty commonly 0
+	void* instancePtr, // Ghidra shows this is pretty commonly 0
+	void* a9) // Ghidra shows this is pretty commonly 0
+{
+	__try {
+		return StaticAllocateObject_orig(instancingClass, outer, objClassName, loadFlags, archetype, errorDev, a7, instancePtr, a9);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		// We failed to allocate an object
+		// Game's gonna die. Let's log it
+
+		// This has to be in a different function since it needs unwound and
+		// that can't be done in __try __except
+		logAllocationFailure(instancingClass, outer, objClassName, loadFlags, archetype);
+		exit(1);
+	}
+}
+
 // Hooks logging functions
 bool hookLoggingFunctions(ISharedProxyInterface* InterfacePtr)
 {
@@ -222,7 +297,6 @@ bool hookLoggingFunctions(ISharedProxyInterface* InterfacePtr)
 
 	INIT_FIND_PATTERN_POSTHOOK(logMemorySmth, /*"40 57 48 83 ec*/ "40 48 c7 44 24 20 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 58 48 89 74 24 60 49 8b f8 48 8b ea");
 	INIT_HOOK_PATTERN(logMemorySmth);
-
 }
 
 SPI_IMPLEMENT_ATTACH
@@ -235,8 +309,9 @@ SPI_IMPLEMENT_ATTACH
 	LoadCommonClassPointers(InterfacePtr);
 
 	// Log debug output messages
-	//INIT_HOOK_PATTERN(OutputDebugStringW);
-
+	INIT_HOOK_PATTERN(OutputDebugStringW);
+	
+	// REVERSE ENGINEERING STUFF ----------------------------
 	// Log loading file to string
 	//INIT_FIND_PATTERN_POSTHOOK(appLoadFileToString, /*48 8b c4 55 41*/ " 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 17 fe ff ff ff");
 	//INIT_HOOK_PATTERN(appLoadFileToString);
@@ -248,19 +323,8 @@ SPI_IMPLEMENT_ATTACH
 
 	//INIT_FIND_PATTERN_POSTHOOK(sfxNameConstructor, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00 48 8b 05 fd 2d 5d 01 48 33 c4 48 89 84 24 f0 06 00 00");
 		//INIT_HOOK_PATTERN(sfxNameConstructor);
+	// -------------------------------------------------------
 
-
-
-		// PACKAGE ROOTING
-		// NOTE: THIS POINTS TO A FUNCTION FOLLOWING BY 0X10 AS THE FUNC IS SMALL
-		//INIT_FIND_PATTERN_POSTHOOK(RootObject, /*"40 55 48 8b ec*/"48 83 ec 50 48 c7 45 e0 fe ff ff ff 48 89 5c 24 60");
-		//writeln("RootObject currently at 0x%p", RootObject);
-		//RootObject = (tUObjectRoot)((char*)RootObject - 0x10);
-		//writeln("Actual RootObject is at 0x%p", RootObject);
-		//INIT_HOOK_PATTERN(RootObject);
-
-		//INIT_FIND_PATTERN_POSTHOOK(BioDownloadableContentRootPackage, /*48 89 5c 24 08*/ "48 89 74 24 10 57 48 83 ec 20 48 8d 99 a0 00 00 00 48 8b f2 48 63 7b 08 44 8b 43 0c");
-		//INIT_HOOK_PATTERN(BioDownloadableContentRootPackage);
 
 		// Log creating an import for when it fails
 		INIT_FIND_PATTERN_POSTHOOK(CreateImport, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
@@ -272,18 +336,27 @@ SPI_IMPLEMENT_ATTACH
 		//INIT_HOOK_PATTERN(LinkerLoadPreload);
 
 		// SYNC LOAD PACKAGE
-		//INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
-		//INIT_HOOK_PATTERN(LoadPackage);
-
-		// ASYNC LOAD PACKAGE
-		//INIT_FIND_PATTERN_POSTHOOK(LoadPackageAsyncTick, /*"48 8b c4 55 56*/ "57 41 54 41 55 41 56 41 57 48 81 ec 80 00 00 00 48 c7 40 90 fe ff ff ff");
-		//INIT_HOOK_PATTERN(LoadPackageAsyncTick);
-
-		INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/ "40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
+		INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
 		INIT_HOOK_PATTERN(LoadPackage);
 
+		// ASYNC LOAD PACKAGE
+		INIT_FIND_PATTERN_POSTHOOK(LoadPackageAsyncTick, /*"48 8b c4 55 56*/ "57 41 54 41 55 41 56 41 57 48 81 ec 80 00 00 00 48 c7 40 90 fe ff ff ff");
+		INIT_HOOK_PATTERN(LoadPackageAsyncTick);
+
+	    // When object instances are allocated, if there's an error
+	    // the game dies. This logs which object was being created
+	    // that the game died on
+		INIT_FIND_PATTERN_POSTHOOK(StaticAllocateObject, /*"4c 89 44 24 18*/ "55 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 80 fb ff ff 48 81 ec 80 05 00 00");
+		INIT_HOOK_PATTERN(StaticAllocateObject);
+
+		// When the Slider's 2DA is loaded for the character creator
+	    // For trying to figure out why merges aren't working to the CC 2DAs
+		//INIT_FIND_PATTERN_POSTHOOK(LoadSlider2DA, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 b8 fc ff ff 48 81 ec 20 04 00 00 48 c7 85 f8 01 00 00 fe ff ff ff")
+		//INIT_HOOK_PATTERN(LoadSlider2DA);
 		//hookLoggingFunctions(InterfacePtr);
 
+		//INIT_FIND_PATTERN_POSTHOOK(EventNotifierAddNotice, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 60 48 c7 45 c0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 8b f1 33 db 48 89 5d c8 48 89 5d d0 48 89 5d d8 48 89 5d e0 48 89 5d e8 48 89 5d f0");
+		//INIT_HOOK_PATTERN(EventNotifierAddNotice);
 		return true;
 }
 

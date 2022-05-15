@@ -178,6 +178,9 @@ struct BioSystem
 };
 BioSystem* GSys = nullptr;
 
+// This is defined in the SDK... technically
+UWorld* GWorld = nullptr;
+
 // UTILITY METHODS ======================================================================
 
 // Logs a message from a source
@@ -258,6 +261,18 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	{
 		writeln(" >> FAILED TO FIND GSys!");
 	}
+
+	// 0x7ff712380fd6 DRM free | MOV RCX, qword ptr [GWorld]
+	addr = findAddressLeaMov(InterfacePtr, "GWorld", "48 8b 0d 6b 2b 47 01 e8 2e 63 30 00 0f 28 f8 48 8b 0d 5c 2b 47 01");
+	if (addr != nullptr)
+	{
+		GWorld = static_cast<UWorld*>(addr);
+		writeln("Found GWorld at %p", GWorld);
+	}
+	else
+	{
+		writeln(" >> FAILED TO FIND GWorld!");
+	}
 }
 
 // Converts a load flags bitmask to it's string representation
@@ -296,6 +311,9 @@ tGenerateName2 sfxNameConstructor = nullptr;
 tGenerateName2 sfxNameConstructor_orig = nullptr;
 
 
+
+// Known to work --------------------
+
 // Loading file to string
 typedef bool (*tappLoadFileToString)(FString* result, wchar_t* filename, void* fileManager, unsigned int flags1);
 tappLoadFileToString appLoadFileToString_orig = nullptr;
@@ -329,10 +347,14 @@ typedef void (*tUObjectRoot)(UObject* callingObject);
 tUObjectRoot RootObject = nullptr;
 tUObjectRoot RootObject_orig = nullptr;
 
-// Adds the specified package to the extra content list of global packages (DotU ?)
+// Adds the specified package to the extra content list of global packages
 typedef void (*tBioDownloadableContentAddRootedPackage)(void* extraContent, UPackage* package);
 tBioDownloadableContentAddRootedPackage BioDownloadableContentRootPackage = nullptr;
 tBioDownloadableContentAddRootedPackage BioDownloadableContentRootPackage_orig = nullptr;
+
+typedef void (*tLoadSlider2DA)(void* param1);
+tLoadSlider2DA LoadSlider2DA = nullptr;
+tLoadSlider2DA LoadSlider2DA_orig = nullptr;
 
 // In-game logging functions
 // =========================================
@@ -361,10 +383,25 @@ tLogInternalNative LogInternal = nullptr;
 tLogInternalNative LogInternal_orig = nullptr;
 
 // RE
-// Called by UnrealScript
+// Unknown function that was tested for registering TFCs, called reliably before Core loads
 typedef void (*tLogSomething)(void* something, wchar_t* parm);
 tLogSomething logMemorySmth = nullptr;
 tLogSomething logMemorySmth_orig = nullptr;
+
+// DebugLogger stuff for devs
+// ==========================================
+typedef UObject* (*tStaticAllocateObject)(
+	UClass* objectClass, // What class of object is being instantiated?
+	UObject* inObject, // The 'Outer' of the object will be set to this 
+	FName a3, // Name of object?
+	long long loadFlags,
+	void* a5, // often 0
+	void* errorDevice, //Often GError
+	const wchar_t* a7, // Often 0
+	void* a8, // Often 0
+	void* a9); // Often 0
+tStaticAllocateObject StaticAllocateObject = nullptr;
+tStaticAllocateObject StaticAllocateObject_orig = nullptr;
 
 // GAME INI FUNCTIONS
 //===========================================
@@ -373,6 +410,16 @@ tLogSomething logMemorySmth_orig = nullptr;
 typedef void (*tCombineFromBuffer)(void* Context, wchar_t* filePath, FString* contents, int extra);
 tCombineFromBuffer FConfigCombineFromBuffer = nullptr;
 tCombineFromBuffer FConfigCombineFromBuffer_orig = nullptr;
+
+// LE1 SPECIFIC
+//===========================================
+
+// Event Notifier is the right side HUD popups.
+typedef void (*tBENAddNotice)(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
+	INT srTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax);
+tBENAddNotice EventNotifierAddNotice = nullptr;
+tBENAddNotice EventNotifierAddNotice_orig = nullptr;
+
 
 
 // MISC THINGS
