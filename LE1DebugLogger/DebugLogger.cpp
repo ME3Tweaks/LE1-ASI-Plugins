@@ -6,11 +6,11 @@
 
 #include "HookPrototypes.h"
 
-SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
+SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"3.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_PRELOAD;
 SPI_PLUGINSIDE_SEQATTACH;
 
-ME3TweaksASILogger logger("DebugLogger v2", "LE1DebugLogger.log");
+ME3TweaksASILogger logger("DebugLogger v3", "LE1DebugLogger.log");
 
 // Not in the header because this is not part of the game we are hooking.
 typedef void (WINAPI* tOutputDebugStringW)(LPCWSTR lpcszString);
