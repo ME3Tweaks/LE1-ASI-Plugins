@@ -2,6 +2,8 @@
 #include <io.h>
 #include <string>
 #include <fstream>
+#include <thread>
+
 #include "HookPrototypes.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
@@ -16,8 +18,7 @@ tOutputDebugStringW OutputDebugStringW_orig = nullptr;
 void WINAPI OutputDebugStringW_hook(LPCWSTR lpcszString)
 {
 	OutputDebugStringW_orig(lpcszString);
-	writeMsg(L"%s", lpcszString); // string already has a newline on the end
-	logger.writeWideToLog(std::wstring_view{ lpcszString });
+	logger.writeToLog(std::wstring_view{ lpcszString }.data(), true);
 	logger.flush();
 }
 
@@ -29,8 +30,7 @@ UObject* CreateImport_hook(ULinkerLoad* Context, int i)
 	if (object == nullptr)
 	{
 		FObjectImport importEntry = Context->ImportMap(i);
-		writeln("Could not resolve #%d: %hs (%hs) in file: %s", -i - 1, importEntry.ObjectName.GetName(), importEntry.ClassName.GetName(), Context->Filename.Data);
-		logger.writeWideLineToLog(wstring_format(L"Could not resolve #%d: %hs (%hs) in file: %s", -i - 1, importEntry.ObjectName.GetName(), importEntry.ClassName.GetName(), Context->Filename.Data));
+		logger.writeToLog(wstring_format(L"Could not resolve #%d: %hs (%hs) in file: %s", -i - 1, importEntry.ObjectName.GetName(), importEntry.ClassName.GetName(), Context->Filename.Data), true);
 		logger.flush();
 	}
 	return object;
@@ -68,7 +68,9 @@ void LogInternal_hook(UObject* callingObject, LE1FFrame* stackFrame)
 	FString stringArg;
 	UObject* sfObject = stackFrame->Object;
 	GNatives[nativeIndex](sfObject, (LE1FFrame*)stackFrame, &stringArg);
-	writeln(L"LogInternal() from %hs: %s", callingObject->GetFullName(), stringArg.Data);
+
+	// Kinda jank way to re-use this code by making it create a string a certain way
+	logMessage(L"LogInternal() from %hs", L"%s", callingObject->GetFullName(), stringArg.Data);
 
 	//restore the code pointer so LogInternal executes normally.
 	stackFrame->Code = originalCodePointer;
@@ -78,14 +80,6 @@ void LogInternal_hook(UObject* callingObject, LE1FFrame* stackFrame)
 #pragma endregion LogInternal
 
 #pragma region PackageLoading
-
-void LoadPackagePersistent_hook(int64 param1, const wchar_t* packageName, uint32 param3, int64* param4, uint32* param5)
-{
-	writeln("Loading persistent package: %s", packageName);
-	LoadPackagePersistent_orig(param1, packageName, param3, param4, param5);
-}
-
-// Returns a UPackage, but we don't have that defined
 UPackage* LoadPackage_hook(UPackage* outer, wchar_t* packageName, ELoadFlags loadFlags)
 {
 	// FindPackageFile doesn't seem to work. Might need to figure out what parameters it really needs.
@@ -104,23 +98,18 @@ UPackage* LoadPackage_hook(UPackage* outer, wchar_t* packageName, ELoadFlags loa
 		writeln("Loading package synchronously: %s", param2);
 	}*/
 
-	writeln("Loading package synchronously: %s, %hs, hasOuter: %s", packageName, GetLoadFlagsString(loadFlags).c_str(), outer != nullptr ? L"true" : L"false");
-	auto package = LoadPackage_orig(outer, packageName, loadFlags);
-	/*if (package)
-	{
-		writeln(", took %fms", package->LoadTime);
-	} else
-	{
-		writeln(", package disposed!");
-	}*/
-	return package;
+
+	logger.writeToLog(wstring_format(L"Loading package synchronously: %s\n", packageName), true);
+	return LoadPackage_orig(outer, packageName, loadFlags);
 }
 
 
 uint32 LoadPackageAsyncTick_hook(UnLinker* linker, int a2, float a3)
 {
+	// Logger writes after the call cause linker might be null to start with, it's populated when tick begins
 	auto result = LoadPackageAsyncTick_orig(linker, a2, a3);
-	writeln("Loading package asynchronously: %s, %f%%", linker->PackageName, linker->EstimatedLoadPercentage);
+	logger.writeToLog(wstring_format(L"Loading package asynchronously: %s, %f%%\n", linker->PackageName, linker->EstimatedLoadPercentage), true);
+	// writeln("Loading package asynchronously: %s, %f%%", linker->PackageName, linker->EstimatedLoadPercentage);
 	return result;
 }
 
@@ -151,107 +140,105 @@ void LinkerLoadPreload_hook(UnLinker* linker, UObject* objectToLoad)
 
 
 #pragma endregion PackageLoading
-
-
-void RootObject_hook(UObject* object)
-{
-	//writeln("Rooting object %hs", object->GetFullName());
-	RootObject_orig(object);
-}
-
-void BioDownloadableContentRootPackage_hook(void* extraContent, UPackage* package)
-{
-	writeln("DLC Rooting Package %hs", package->GetFullName());
-	BioDownloadableContentRootPackage_orig(extraContent, package);
-}
+//void RootObject_hook(UObject* object)
+//{
+//	//writeln("Rooting object %hs", object->GetFullName());
+//	RootObject_orig(object);
+//}
+//
+//void BioDownloadableContentRootPackage_hook(void* extraContent, UPackage* package)
+//{
+//	writeln("DLC Rooting Package %hs", package->GetFullName());
+//	BioDownloadableContentRootPackage_orig(extraContent, package);
+//}
 
 // DEBUG: APP LOAD FILE TO STRING
-bool appLoadFileToString_hook(FString* result, wchar_t* filename, void* fileManager, unsigned int flags1)
-{
-	// Param3: GFileManager?
-	writeln(L"appLoadFileToString: %s", filename);
-	auto loadResult = appLoadFileToString_orig(result, filename, fileManager, flags1);
-	return loadResult;
-}
+//bool appLoadFileToString_hook(FString* result, wchar_t* filename, void* fileManager, unsigned int flags1)
+//{
+//	// Param3: GFileManager?
+//	writeln(L"appLoadFileToString: %s", filename);
+//	auto loadResult = appLoadFileToString_orig(result, filename, fileManager, flags1);
+//	return loadResult;
+//}
+//
+//void logMemorySmth_hook(void* parm1, wchar_t* parm2)
+//{
+//	logMemorySmth_orig(parm1, parm2);
+//}
 
-void logMemorySmth_hook(void* parm1, wchar_t* parm2)
-{
-	logMemorySmth_orig(parm1, parm2);
-}
+//void* generateNameFromDisk_hook(void* param1, void* param2, wchar_t* param3)
+//{
+//	writeln("Generate name %s", param3);
+//	auto val = generateNameFromDisk_orig(param1, param2, param3);
+//	return val;
+//}
+//
+//void sfxNameConstructor_hook(unsigned int* outIndex, wchar_t* nameValue, int nameNumber, BOOL parm4, BOOL parm5)
+//{
+//	if (nameNumber != 0)
+//	{
+//		wchar_t* t = L"poop";
+//		unsigned int outIdx[2];
+//		sfxNameConstructor_orig(&outIdx[0], t, 0, 1, 1);
+//		writeln("TEST name lookup: %i_%i %s %i %i %i", outIdx[0], outIdx[1], t, 0, 1, 1);
+//
+//		auto chunk = SDKInitializer::Instance()->GetBioNamePools()[0];
+//		auto entry = (FNameEntry*)((BYTE*)chunk + outIdx[0]);
+//		auto value = entry->AnsiName;
+//
+//	}
+//	sfxNameConstructor_orig(outIndex, nameValue, nameNumber, parm4, parm5);
+//	writeln("Name lookup: %i %s %i %i %i", *outIndex, nameValue, nameNumber, parm4, parm5);
+//}
 
-void* generateNameFromDisk_hook(void* param1, void* param2, wchar_t* param3)
-{
-	writeln("Generate name %s", param3);
-	auto val = generateNameFromDisk_orig(param1, param2, param3);
-	return val;
-}
+//void* GetBioEventNotifier()
+//{
+//	if (GWorld != nullptr)
+//	{
+//		auto something1 = *(int64*)((int64*)(GWorld)+0x88);
+//		auto something2 = **(int64**)(something1 + 0x60);
+//		auto bioEventNotifier = *(int64*)(something2 + 0xb8c);
+//		return (void*)bioEventNotifier;
+//	}
+//}
+//
+//void LoadSlider2DA_hook(void* parm1)
+//{
+//	LoadSlider2DA_orig(parm1);
+//}
 
-void sfxNameConstructor_hook(unsigned int* outIndex, wchar_t* nameValue, int nameNumber, BOOL parm4, BOOL parm5)
-{
-	if (nameNumber != 0)
-	{
-		wchar_t* t = L"poop";
-		unsigned int outIdx[2];
-		sfxNameConstructor_orig(&outIdx[0], t, 0, 1, 1);
-		writeln("TEST name lookup: %i_%i %s %i %i %i", outIdx[0], outIdx[1], t, 0, 1, 1);
+//void* GetBioWorldInfo()
+//{
+//	// Doesn't work!
+//	/*if (GWorld)
+//	{
+//		return GWorld->CurrentLevel1->Actors.Data[0];
+//	}*/
+//	return nullptr;
+//}
 
-		auto chunk = SDKInitializer::Instance()->GetBioNamePools()[0];
-		auto entry = (FNameEntry*)((BYTE*)chunk + outIdx[0]);
-		auto value = entry->AnsiName;
-
-	}
-	sfxNameConstructor_orig(outIndex, nameValue, nameNumber, parm4, parm5);
-	writeln("Name lookup: %i %s %i %i %i", *outIndex, nameValue, nameNumber, parm4, parm5);
-}
-
-void* GetBioEventNotifier()
-{
-	if (GWorld != nullptr)
-	{
-		auto something1 = *(int64*)((int64*)(GWorld)+0x88);
-		auto something2 = **(int64**)(something1 + 0x60);
-		auto bioEventNotifier = *(int64*)(something2 + 0xb8c);
-		return (void*)bioEventNotifier;
-	}
-}
-
-void LoadSlider2DA_hook(void* parm1)
-{
-	LoadSlider2DA_orig(parm1);
-}
-
-void* GetBioWorldInfo()
-{
-	// Doesn't work!
-	/*if (GWorld)
-	{
-		return GWorld->CurrentLevel1->Actors.Data[0];
-	}*/
-	return nullptr;
-}
-
-void EventNotifierAddNotice_hook(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
-	INT stringRefTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax)
-{
-	// GetBioWorldInfo doesn't work. We have to use ghidra offsets, not rely on VC++ since
-	// compiler might change offsets of our compiled classes
-	auto bwi = GetBioWorldInfo();
-	auto eventNotifier = *(int64*)((int64)bwi + 0xb8c); //calculates a pointer, and dereferences it.
-	EventNotifierAddNotice_orig(bioEventNotifier, nType, nContext, nTimeToLive, nIconIndex, /*stringRefTitle*/157152, strTitle, nQuantity, nQuantMin, nQuantMax);
-}
+//void EventNotifierAddNotice_hook(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
+//	INT stringRefTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax)
+//{
+//	// GetBioWorldInfo doesn't work. We have to use ghidra offsets, not rely on VC++ since
+//	// compiler might change offsets of our compiled classes
+//	auto bwi = GetBioWorldInfo();
+//	auto eventNotifier = *(int64*)((int64)bwi + 0xb8c); //calculates a pointer, and dereferences it.
+//	EventNotifierAddNotice_orig(bioEventNotifier, nType, nContext, nTimeToLive, nIconIndex, /*stringRefTitle*/157152, strTitle, nQuantity, nQuantMin, nQuantMax);
+//}
 
 void logAllocationFailure(UClass* instancingClass, UObject* outer, FName objClassName, long long loadFlags, UObject* archetype) {
 	char* instancingClassName = instancingClass ? instancingClass->GetFullName() : nullptr;
 	char* outerName = outer ? outer->GetFullName() : nullptr;
 	char* objectName = objClassName.Instanced();
 	char* archetypeName = archetype ? archetype->GetFullName() : nullptr;
-	logger.writeWideLineToLog(L"Error allocating object. Some information that may help track down the problem:");
-	logger.writeWideLineToLog(wstring_format(L"\tInstancing class name: %hs", instancingClassName));
-	logger.writeWideLineToLog(wstring_format(L"\tOuter ('Link' in modding tools): %hs", outerName));
-	logger.writeWideLineToLog(wstring_format(L"\tName of object being created: %hs", objectName));
-	logger.writeWideLineToLog(wstring_format(L"\tArchetype: %hs", archetypeName));
+	logger.writeToLog(L"ERROR ALLOCATING OBJECT! Some information that may help track down the problem:\n", true);
+	logger.writeToLog(wstring_format(L"\tInstancing class name: %hs\n", instancingClassName), true);
+	logger.writeToLog(wstring_format(L"\tOuter ('Link' in modding tools): %hs\n", outerName), true);
+	logger.writeToLog(wstring_format(L"\tName of object being created: %hs\n", objectName), true);
+	logger.writeToLog(wstring_format(L"\tArchetype: %hs\n", archetypeName), true);
 
-	logger.writeWideLineToLog(L"DebugLogger: Terminating application due to crash in StaticAllocateObject()");
+	logger.writeToLog(L"DebugLogger: Terminating application due to crash in StaticAllocateObject(). See the DebugLogger log file.\n", true);
 }
 
 UObject* StaticAllocateObject_hook(
@@ -275,6 +262,7 @@ UObject* StaticAllocateObject_hook(
 		// This has to be in a different function since it needs unwound and
 		// that can't be done in __try __except
 		logAllocationFailure(instancingClass, outer, objClassName, loadFlags, archetype);
+		std::this_thread::sleep_for(chrono::seconds(8));
 		exit(1);
 	}
 }
@@ -295,8 +283,8 @@ bool hookLoggingFunctions(ISharedProxyInterface* InterfacePtr)
 	INIT_FIND_PATTERN_POSTHOOK(FErrorOutputDeviceLogf, /*"48 8b c4 48 89*/ "50 10 4c 89 40 18 4c 89 48 20 56 48 83 ec 50 83 79 08 00 48 8b f1");
 	INIT_HOOK_PATTERN(FErrorOutputDeviceLogf);
 
-	INIT_FIND_PATTERN_POSTHOOK(logMemorySmth, /*"40 57 48 83 ec*/ "40 48 c7 44 24 20 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 58 48 89 74 24 60 49 8b f8 48 8b ea");
-	INIT_HOOK_PATTERN(logMemorySmth);
+	//INIT_FIND_PATTERN_POSTHOOK(logMemorySmth, /*"40 57 48 83 ec*/ "40 48 c7 44 24 20 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 58 48 89 74 24 60 49 8b f8 48 8b ea");
+	//INIT_HOOK_PATTERN(logMemorySmth);
 }
 
 SPI_IMPLEMENT_ATTACH
