@@ -148,7 +148,7 @@ void SendStringToLEX(wstring wstr) {
 		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
 		ME3ExpMsg msg;
 		const auto len = writePos - (msgPtr - msgBuffer);
-		wcsncpy_s(msg.msg, msgPtr, len);
+		wcsncpy_s(msg.msg, msgPtr, /*len*/_TRUNCATE);
 		COPYDATASTRUCT cds;
 		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
 		cds.dwData = SENT_FROM_LE1;

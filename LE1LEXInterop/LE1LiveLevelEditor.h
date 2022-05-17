@@ -20,21 +20,22 @@ private:
 			if (obj && obj->IsA(actorClass))
 			{
 				auto actor = static_cast<AActor*>(obj);
-				const auto name = actor->Name.GetName();
-				if (strstr(name, "Default_"))// || actor->bStatic || !actor->bMovable)
-				{
-					continue;
+				if (actor) {
+					const auto name = actor->Name.GetName();
+					if (strstr(name, "Default_"))// || actor->bStatic || !actor->bMovable)
+					{
+						continue;
+					}
+					Actors.Add(actor); // We will send them to LEX after we bundle it all up
 				}
-				Actors.Add(actor); // We will send them to LEX after we bundle it all up
 			}
 		}
 
-		// Tell LEX how many actors we are sending over, so it knows when it's received them all.
-		std::wstringstream ss;
-		ss << "LIVELEVELEDITOR ACTORDUMPCOUNT " << Actors.Count;
-		SendStringToLEX(ss.str());
+		// Tell LEX we're about to send over an actor list, so it can clear it and be ready for new data.
+		SendStringToLEX(L"LIVELEVELEDITOR ACTORDUMPSTART");
 
 		// Send the actor information to LEX
+		int numSent = 0;
 		for (int i = 0; i < Actors.Count; i++)
 		{
 			auto actor = static_cast<AActor*>(Actors.Data[i]);
@@ -56,9 +57,13 @@ private:
 					ss2 << ":static";
 				}
 
+				numSent++;
 				SendStringToLEX(ss2.str());
 			}
 		}
+
+		// Tell LEX we're done.
+		SendStringToLEX(L"LIVELEVELEDITOR ACTORDUMPFINISHED");
 
 		// IDK if this is necessary since we are not depending on the SendMessageToLEX() method
 		//for (auto i = 0; i < numVarLinks; i++)
@@ -109,6 +114,38 @@ private:
 		}
 	}
 
+	static void SendActorPositionData(char* mapName, char* actorName)
+	{
+		writeln(L"Looking for: %hs", actorName);
+		const auto objCount = UObject::GObjObjects()->Count;
+		const auto objArray = UObject::GObjObjects()->Data;
+
+		const auto actorClass = AActor::StaticClass();
+		for (auto j = 0; j < objCount; j++)
+		{
+			auto obj = objArray[j];
+			if (obj && obj->IsA(actorClass)) {
+				auto objMapName = GetContainingMapName(obj);
+				if (_strcmpi(mapName, objMapName) != 0)
+					continue; // Go to next object.
+
+				auto name = obj->GetFullName(false);
+				writeln(L"%hs", name);
+				if (strcmp(actorName, name) == 0)
+				{
+					auto actor = static_cast<AActor*>(obj);
+					std::wstringstream ss1;
+					ss1 << "LIVELEVELEDITOR ACTORLOC " << actor->Location.X << " " << actor->Location.Y << " " << actor->Location.Z;
+					SendStringToLEX(ss1.str());
+
+					std::wstringstream ss2;
+					ss2 << "LIVELEVELEDITOR ACTORROT " << actor->Rotation.Pitch << " " << actor->Rotation.Yaw << " " << actor->Rotation.Roll;
+					SendStringToLEX(ss2.str());
+				}
+			}
+		}
+	}
+
 public:
 	// Return false if other features shouldn't be able to also handle this function call
 	// Return true if other features should also be able to handle this function call
@@ -123,8 +160,8 @@ public:
 				DumpActors(op);
 			}
 		}
-		else*/ 
-			if (strcmp(className, "SeqAct_LEXAccessDumpedActorsList") == 0)
+		else*/
+		if (strcmp(className, "SeqAct_LEXAccessDumpedActorsList") == 0)
 		{
 			// What is this used for? -Mgamerz
 			if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
@@ -160,6 +197,21 @@ public:
 		if (startsWith("LLE_DUMP_ACTORS", command))
 		{
 			DumpActors();
+			return true;
+		}
+
+		if (startsWith("LLE_GET_ACTOR_POSDATA ", command))
+		{
+			// This is mega jank
+			auto commandLen = strlen(command) - 22 - 2; // 22 is command len (plus space), -2 for \r\n
+			auto remainingCmd = substr(command, 22, commandLen); // string part after the last one
+			auto splitPos = strstr(remainingCmd, " ");
+			auto mapName = substr(remainingCmd, 0, splitPos - remainingCmd);
+			remainingCmd = remainingCmd + (splitPos - remainingCmd) + 1;
+			auto objName = substr(remainingCmd, 0, strlen(remainingCmd));
+
+
+			SendActorPositionData(mapName, objName);
 			return true;
 		}
 

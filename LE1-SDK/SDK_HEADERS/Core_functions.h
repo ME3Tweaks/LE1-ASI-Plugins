@@ -93,7 +93,7 @@ char* UObject::GetNameCPP()
 	return cOutBuffer;
 }
 
-char* UObject::GetFullName()
+char* UObject::GetFullName(bool includeClass)
 {
 	if (this->Class && this->Outer)
 	{
@@ -101,21 +101,33 @@ char* UObject::GetFullName()
 
 		if (this->Outer->Outer)
 		{
-			strcpy_s(cOutBuffer, this->Class->GetName());
-			strcat_s(cOutBuffer, " ");
-			strcat_s(cOutBuffer, this->Outer->Outer->GetName());
+			if (includeClass) {
+				strcpy_s(cOutBuffer, this->Class->GetName());
+				strcat_s(cOutBuffer, " ");
+				strcat_s(cOutBuffer, this->Outer->Outer->GetInstancedName());
+			}
+			else
+			{
+				strcpy_s(cOutBuffer, this->Outer->Outer->GetInstancedName());
+			}
 			strcat_s(cOutBuffer, ".");
-			strcat_s(cOutBuffer, this->Outer->GetName());
+			strcat_s(cOutBuffer, this->Outer->GetInstancedName());
 			strcat_s(cOutBuffer, ".");
-			strcat_s(cOutBuffer, this->GetName());
+			strcat_s(cOutBuffer, this->GetInstancedName());
 		}
 		else
 		{
-			strcpy_s(cOutBuffer, this->Class->GetName());
-			strcat_s(cOutBuffer, " ");
-			strcat_s(cOutBuffer, this->Outer->GetName());
+			if (includeClass) {
+				strcpy_s(cOutBuffer, this->Class->GetName());
+				strcat_s(cOutBuffer, " ");
+				strcat_s(cOutBuffer, this->Outer->GetInstancedName());
+			}
+			else
+			{
+				strcpy_s(cOutBuffer, this->Outer->GetInstancedName());
+			}
 			strcat_s(cOutBuffer, ".");
-			strcat_s(cOutBuffer, this->GetName());
+			strcat_s(cOutBuffer, this->GetInstancedName());
 		}
 
 		return cOutBuffer;
