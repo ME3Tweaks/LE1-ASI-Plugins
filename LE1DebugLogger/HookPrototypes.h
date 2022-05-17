@@ -183,15 +183,6 @@ UWorld* GWorld = nullptr;
 
 // UTILITY METHODS ======================================================================
 
-// Logs a message from a source
-void logMessage(const wchar_t* logSource, wchar_t* formatStr, void* param1, void* param2)
-{
-	// Todo: Log to disk.
-	fwprintf_s(stdout, L"%s: ", logSource);
-	fwprintf_s(stdout, formatStr, param1, param2);
-	fwprintf_s(stdout, L"\n");
-}
-
 // Searches for the specified byte pattern, which is a 7-byte mov or lea instruction, with the 'source' operand being the address being calculated
 void* findAddressLeaMov(ISharedProxyInterface* InterfacePtr, char* name, char* bytePattern)
 {

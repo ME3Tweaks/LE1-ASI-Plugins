@@ -4,19 +4,30 @@
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <ostream>
 #include <streambuf>
 #include <shlwapi.h>
 #include <sstream>
 #include "Strsafe.h"
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+
+#include "LEXLE1Interop.h"
+#include "UtilityMethods.h"
+
+// Featureset
+#include "SharedData.h"
+#include "LEXCommunications.h"
+#include "LE1AnimViewer.h"
+#include "LE1GenericCommands.h"
+#include "LE1PathfindingGPS.h"
+#include "LE1LiveLevelEditor.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
-#define MYHOOK "LE1LEXInterop_"
+// ID to pass to the notification system when GPS ones are issued
+#define TLK_STRID_GPS 102568922
+
 
 SPI_PLUGINSIDE_SUPPORT(L"LE1 LEX Interop", L"1.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
@@ -25,294 +36,88 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 TCHAR SplashPath[MAX_PATH];
 HANDLE hPipe;
 LPOVERLAPPED pipeOverlap;
-bool playerGPSActive;
 
-ISharedProxyInterface* SPIInterfacePtr;
 
-optional<std::wstring> pendingConsoleCommand;
 
-char* GetUObjectClassName(UObject* object)
+
+// This is done via SharedData now on every tick
+//void GetCamPOV(USequenceOp* const op)
+//{
+//	const auto numVarLinks = op->VariableLinks.Num();
+//	for (auto i = 0; i < numVarLinks; i++)
+//	{
+//
+//		if (op->VariableLinks(i).LinkedVariables.Count == 0)
+//		{
+//			continue;
+//		}
+//		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
+//		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Position", 10) && IsA<USeqVar_Vector>(seqVar))
+//		{
+//			const auto posVar = static_cast<USeqVar_Vector*>(seqVar);
+//			posVar->VectValue = SharedData::cachedPlayerPOV.Location;
+//		}
+//		else if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Rotation", 10) && IsA<USeqVar_Vector>(seqVar))
+//		{
+//			const auto pitch = ToRadians(SharedData::cachedPlayerPOV.Rotation.Pitch);
+//			const auto yaw = ToRadians(SharedData::cachedPlayerPOV.Rotation.Yaw);
+//			const auto cp = cos(pitch);
+//			const auto sp = sin(pitch);
+//			const auto cy = cos(yaw);
+//			const auto sy = sin(yaw);
+//			FVector rotVect;
+//			rotVect.X = cp * cy;
+//			rotVect.Y = cp * sy;
+//			rotVect.Z = sp;
+//
+//			auto* rotVar = static_cast<USeqVar_Vector*>(seqVar);
+//			rotVar->VectValue = rotVect;
+//		}
+//	}
+//}
+
+#pragma region TLKLookup
+// TLK lookups to keys in this map will return the data by their key instead of their original data.
+// This does NOT support interpolation
+map<int, FString> tlkOverride;
+
+// LE1 Specific: Message notifications in-game
+typedef FString* (*tTLKLookup)(void* param1, FString* outString, int stringID, BOOL bParse);
+tTLKLookup TLKLookup = nullptr;
+tTLKLookup TLKLookup_orig = nullptr;
+int countBetween = 5;
+FString* TLKLookup_hook(void* param1, FString* outString, int stringID, BOOL bParse)
 {
-	static char cOutBuffer[256];
 
-	sprintf_s(cOutBuffer, "%s", object->Class->GetName());
-
-	return cOutBuffer;
-}
-
-char* GetContainingMapName(UObject* object)
-{
-	if (object->Class && object->Outer)
+	//if (countBetween) {
+	//	std::this_thread::sleep_for(chrono::seconds(countBetween));
+	//	countBetween = 0; // Debugger should attach by now
+	//}
+	if (stringID == TLK_STRID_GPS)
 	{
-		class UObject* OuterObj = object->Outer;
-		static std::string lastName = "Undefined";
-		UINT32 lastIndex = -1;
-		while (OuterObj->Class && OuterObj->Outer)
-		{
-			lastName = OuterObj->Outer->GetName();
-			lastIndex = OuterObj->Outer->Name.Number;
-
-			OuterObj = OuterObj->Outer;
-		}
-		if (lastIndex > 0) {
-			lastIndex--; //Subtract 1 to match filesystem indexing
-			lastName += "_" + std::to_string(lastIndex);
-		}
-		return (char*)lastName.c_str();
+		writeln(L"HIT");
 	}
-	return "(null)";
-}
-
-wchar_t msgBuffer[512];
-wchar_t* msgPtr;
-int writePos = 0;
-void WriteToMsgBuffer(const wchar_t* wstr, const int len, const bool msgStart = false) {
-	if (msgStart)
+	map<int, FString>::iterator it = tlkOverride.find(stringID);
+	if (it != tlkOverride.end())
 	{
-		if (writePos > 400)
-		{
-			writePos = 0;
-		}
-		msgPtr = msgBuffer + writePos;
+		//element found;
+		return &it->second;
+	}
+
+	return TLKLookup_orig(param1, outString, stringID, bParse);
+
+	auto retVal = TLKLookup_orig(param1, outString, stringID, bParse);
+	if (outString && outString->Count > 0) {
+		writeln(L"GetString(%p, %s, %i, %i)", param1, outString->Data, stringID, bParse);
 	}
 	else
 	{
-		msgBuffer[writePos] = ' ';
-		writePos++;
+		//writeln(L"GetString(%p, (null), %i, %i)", param1, stringID, bParse);
 	}
-	for (auto i = 0; i < len && wstr[i] != 0 && writePos < 512; i++, writePos++)
-	{
-		msgBuffer[writePos] = wstr[i];
-	}
+	return retVal;
 }
 
-void WriteToMsgBuffer(const FString& fstr, const bool msgStart = false) {
-	WriteToMsgBuffer(fstr.Data, fstr.Count, msgStart);
-}
-
-void WriteToMsgBuffer(wstring wstr, const bool msgStart = false) {
-	WriteToMsgBuffer(wstr.c_str(), wstr.length(), msgStart);
-}
-
-struct ME3ExpMsg
-{
-	wchar_t msg[100];
-};
-
-void SendMessageToLEX(USequenceOp* op)
-{
-	const auto numVarLinks = op->VariableLinks.Num();
-	for (auto i = 0; i < numVarLinks; i++)
-	{
-		const auto& varLink = op->VariableLinks(i);
-		for (auto j = 0; j < varLink.LinkedVariables.Count; ++j)
-		{
-			const auto seqVar = varLink.LinkedVariables(j);
-			if (!_wcsnicmp(varLink.LinkDesc.Data, L"MessageName", 12) && IsA<USeqVar_String>(seqVar))
-			{
-				const USeqVar_String* strVar = static_cast<USeqVar_String*>(seqVar);
-				WriteToMsgBuffer(strVar->StrValue, true);
-			}
-			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"String", 7) && IsA<USeqVar_String>(seqVar))
-			{
-				const USeqVar_String* strVar = static_cast<USeqVar_String*>(seqVar);
-				WriteToMsgBuffer(L"string", 7);
-				WriteToMsgBuffer(strVar->StrValue);
-			}
-			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Vector", 7) && IsA<USeqVar_Vector>(seqVar))
-			{
-				const USeqVar_Vector* vectorVar = static_cast<USeqVar_Vector*>(seqVar);
-				WriteToMsgBuffer(L"vector", 7);
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.X));
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.Y));
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.Z));
-			}
-			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Float", 5) && IsA<USeqVar_Float>(seqVar))
-			{
-				const USeqVar_Float* floatVar = static_cast<USeqVar_Float*>(seqVar);
-				WriteToMsgBuffer(L"float", 6);
-				WriteToMsgBuffer(to_wstring(floatVar->FloatValue));
-			}
-			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Int", 3) && IsA<USeqVar_Int>(seqVar))
-			{
-				const USeqVar_Int* intVar = static_cast<USeqVar_Int*>(seqVar);
-				WriteToMsgBuffer(L"int", 4);
-				WriteToMsgBuffer(to_wstring(intVar->IntValue));
-			}
-			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Bool", 4) && IsA<USeqVar_Bool>(seqVar))
-			{
-				const USeqVar_Bool* boolVar = static_cast<USeqVar_Bool*>(seqVar);
-				WriteToMsgBuffer(L"bool", 5);
-				WriteToMsgBuffer(to_wstring(boolVar->bValue));
-			}
-		}
-	}
-	msgBuffer[writePos] = 0;
-	writePos++;
-	auto handle = FindWindow(nullptr, L"Legendary Explorer");
-	if (handle)
-	{
-		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
-		ME3ExpMsg msg;
-		const auto len = writePos - (msgPtr - msgBuffer);
-		wcsncpy_s(msg.msg, msgPtr, len);
-		COPYDATASTRUCT cds;
-		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
-		cds.dwData = SENT_FROM_LE1;
-		cds.cbData = sizeof(msg);
-		cds.lpData = &msg;
-		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
-	}
-}
-
-void SendStringToLEX(wstring wstr) {
-	WriteToMsgBuffer(wstr, true);
-	msgBuffer[writePos] = 0;
-	writePos++;
-	auto handle = FindWindow(nullptr, L"Legendary Explorer");
-	if (handle)
-	{
-		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
-		ME3ExpMsg msg;
-		const auto len = writePos - (msgPtr - msgBuffer);
-		wcsncpy_s(msg.msg, msgPtr, len);
-		COPYDATASTRUCT cds;
-		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
-		cds.dwData = SENT_FROM_LE1;
-		cds.cbData = sizeof(msg);
-		cds.lpData = &msg;
-		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
-	}
-}
-
-TArray<UObject*> Actors;
-
-void DumpActors(USequenceOp* const op)
-{
-	const auto numVarLinks = op->VariableLinks.Num();
-	const auto objCount = UObject::GObjObjects()->Count;
-	const auto objArray = UObject::GObjObjects()->Data;
-
-	Actors.Count = 0; //clear the array without de-allocating any memory.
-	ofstream ofs;
-	ofs.open(SplashPath);
-	const auto actorClass = AActor::StaticClass();
-	for (auto j = 0; j < objCount; j++)
-	{
-		auto obj = objArray[j];
-		if (obj && obj->IsA(actorClass))
-		{
-			auto actor = static_cast<AActor*>(obj);
-			const auto name = actor->Name.GetName();
-			if (strstr(name, "Default_"))// || actor->bStatic || !actor->bMovable)
-			{
-				continue;
-			}
-			Actors.Add(actor);
-			ofs << GetContainingMapName(actor) << ":" << name;
-			const auto index = actor->Name.Number;
-			if (index > 0)
-			{
-				ofs << '_' << index - 1;
-			}
-			if (actor->bStatic || !actor->bMovable)
-			{
-				ofs << ":static";
-			}
-			ofs << endl;
-		}
-	}
-	ofs.close();
-
-	for (auto i = 0; i < numVarLinks; i++)
-	{
-
-		if (op->VariableLinks(i).LinkedVariables.Count == 0)
-		{
-			continue;
-		}
-		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Length", 7) && IsA<USeqVar_Int>(seqVar))
-		{
-			const auto lenVar = static_cast<USeqVar_Int*>(seqVar);
-			lenVar->IntValue = Actors.Count;
-			break;
-		}
-	}
-}
-
-void AccessDumpedActorsList(USequenceOp* const op)
-{
-	const auto numVarLinks = op->VariableLinks.Num();
-	int index = 0;
-	for (auto i = 0; i < numVarLinks; i++)
-	{
-		if (op->VariableLinks(i).LinkedVariables.Count == 0)
-		{
-			continue;
-		}
-		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Index", 5) && IsA<USeqVar_Int>(seqVar))
-		{
-			const auto idxVar = static_cast<USeqVar_Int*>(seqVar);
-			index = idxVar->IntValue;
-		}
-		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Output Object", 15) && IsA<USeqVar_Object>(seqVar))
-		{
-			const auto outputVar = static_cast<USeqVar_Object*>(seqVar);
-			if (index >= 0 && index < Actors.Count)
-			{
-				outputVar->ObjValue = Actors(index);
-			}
-			else
-			{
-				outputVar->ObjValue = nullptr;
-			}
-		}
-	}
-}
-
-float ToRadians(const int unrealRotationUnits)
-{
-	return unrealRotationUnits * 360.0f / 65536.0f * 3.1415926535897931f / 180.0f;
-}
-
-FTPOV cachedPOV;
-void GetCamPOV(USequenceOp* const op)
-{
-	const auto numVarLinks = op->VariableLinks.Num();
-	for (auto i = 0; i < numVarLinks; i++)
-	{
-
-		if (op->VariableLinks(i).LinkedVariables.Count == 0)
-		{
-			continue;
-		}
-		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Position", 10) && IsA<USeqVar_Vector>(seqVar))
-		{
-			const auto posVar = static_cast<USeqVar_Vector*>(seqVar);
-			posVar->VectValue = cachedPOV.Location;
-		}
-		else if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Rotation", 10) && IsA<USeqVar_Vector>(seqVar))
-		{
-			const auto pitch = ToRadians(cachedPOV.Rotation.Pitch);
-			const auto yaw = ToRadians(cachedPOV.Rotation.Yaw);
-			const auto cp = cos(pitch);
-			const auto sp = sin(pitch);
-			const auto cy = cos(yaw);
-			const auto sy = sin(yaw);
-			FVector rotVect;
-			rotVect.X = cp * cy;
-			rotVect.Y = cp * sy;
-			rotVect.Z = sp;
-
-			auto* rotVar = static_cast<USeqVar_Vector*>(seqVar);
-			rotVar->VectValue = rotVect;
-		}
-	}
-}
-
+#pragma endregion TLKLookup
 
 // ProcessEvent hook
 // ======================================================================
@@ -323,154 +128,53 @@ tProcessEvent ProcessEvent = nullptr;
 tProcessEvent ProcessEvent_orig = nullptr;
 void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
-	const auto className = Context->Class->Name.GetName();
-	if (strcmp(className, "SeqAct_SendMessageToLEX") == 0)
-	{
-		if (strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated") == 0)
-		{
-			const auto op = static_cast<USequenceOp*>(Context);
-			SendMessageToLEX(op);
-		}
-	}
-	else if (strcmp(className, "SeqAct_LEXDumpActors") == 0)
-	{
-		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-		{
-			const auto op = static_cast<USequenceOp*>(Context);
-			DumpActors(op);
-		}
-	}
-	else if (strcmp(className, "SeqAct_LEXAccessDumpedActorsList") == 0)
-	{
-		if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-		{
-			const auto op = static_cast<USequenceOp*>(Context);
-			AccessDumpedActorsList(op);
-		}
-	}
-	else if (strcmp(className, "SeqAct_LEXGetPlayerCamPOV") == 0)
-	{
-		if (strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated") == 0)
-		{
-			const auto op = static_cast<USequenceOp*>(Context);
-			GetCamPOV(op);
-		}
-	}
-	else if (IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
-	{
-		const auto playerController = static_cast<ABioPlayerController*>(Context);
-		cachedPOV = playerController->PlayerCamera->CameraCache.POV;
+	// ProcessEvent calls return true or false if the following functions should also handle
+	// the call (to increase perf)
+	// Implementations should take care to allow follow up invocations if it might be appropriate
+	// This is a debug tool; performance loss is to be expected
 
-		// PLAYER GPS
-		if (hPipe != NULL && playerGPSActive && playerController->Pawn != nullptr)
-		{
-			// What happens when you don't have an interpolation method
-			std::wstringstream ss;
-			ss << "PLAYERLOC=" << playerController->Pawn->Location.X << "," << playerController->Pawn->Location.Y << "," << playerController->Pawn->Location.Z;
-			SendStringToLEX(ss.str());
+	bool continueChecking = LEXCommunications::ProcessEvent(Context, Function, Parms, Result);
+	if (continueChecking) continueChecking = LE1PathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
+	if (continueChecking) continueChecking = LE1LiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
 
-			std::wstringstream ss2;
-			ss2 << "PLAYERROT=" << playerController->Pawn->Rotation.Pitch << "," << playerController->Pawn->Rotation.Yaw << "," << playerController->Pawn->Rotation.Roll;
-			SendStringToLEX(ss2.str());
-		}
-
-		if (pendingConsoleCommand.has_value())
-		{
-			auto str = pendingConsoleCommand.value().data();
-			playerController->ConsoleCommand(str, 0);
-			//writeln("Ran CE!");
-			pendingConsoleCommand.reset(); // Clear
-		}
-	}
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
 
-bool startsWith(const char* pre, const char* str)
-{
-	size_t lenpre = strlen(pre),
-		lenstr = strlen(str);
-	return lenstr < lenpre ? false : memcmp(pre, str, lenpre) == 0;
-}
 
-char* substr(char* arr, int begin, int len)
+// Note: Doesn't work. Game doesn't show notification
+void sendInGameNotification(wchar_t* shortMessage, int tlkIDToUse)
 {
-	char* res = new char[len + 1];
-	for (int i = 0; i < len; i++)
-		res[i] = *(arr + begin + i);
-	res[len] = 0;
-	return res;
-}
-
-typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
-tSFXNameConstructor sfxNameConstructor = nullptr;
-
-BOOL CreateName(const wchar_t* name, int number, FName* outName)
-{
-	if (sfxNameConstructor == nullptr)
+	auto bioWorldInfo = reinterpret_cast<ABioWorldInfo*>(FindObjectOfType(ABioWorldInfo::StaticClass()));
+	if (bioWorldInfo && bioWorldInfo->EventNotifier)
 	{
-		// This is so we can use the macro for slightly cleaner code.
-		auto InterfacePtr = SPIInterfacePtr;
-		INIT_FIND_PATTERN_POSTHOOK(sfxNameConstructor, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00 48 8b 05 fd 2d 5d 01 48 33 c4 48 89 84 24 f0 06 00 00");
+		tlkOverride.insert_or_assign(tlkIDToUse, FString(shortMessage));
+		bioWorldInfo->EventNotifier->AddNotice(1, 3, 10000, 2, tlkIDToUse, L"Level Up!", 0, 0, 0);
 	}
-
-	sfxNameConstructor(outName, name, number, TRUE, 0);
-	return TRUE;
 }
 
 void ProcessCommand(char str[1024], DWORD dword)
 {
-	writeln("Received command:");
-	printf(str);
-	printf("\n");
-	if (strcmp(str, "ACTIVATE_PLAYERGPS\r\n") == 0)
-	{
-		playerGPSActive = true;
-		FName name;
-		CreateName(L"LEX_GPS", 0, &name);
-	}
-	else if (strcmp(str, "DEACTIVATE_PLAYERGPS\r\n") == 0)
-	{
-		playerGPSActive = false;
-	}
-	else if (strcmp(str, "MGAMERZ_TEST\r\n") == 0)
-	{
-		// This is TEST code
-		auto cheetahmen = FindObjectOfType(UBioCheatManager::StaticClass());
-		if (cheetahmen)
-		{
-			auto cheetah = reinterpret_cast<UBioCheatManager*>(cheetahmen);
-			FName levelName;
-			CreateName(L"BIOA_LAV60_00_LAY", 0, &levelName);
-			cheetah->StreamLevelIn(levelName);
-		}
-	}
-	else if (startsWith("CAUSEEVENT ", str))
-	{
-		auto eventName = substr(str, 11, strlen(str) - 13); // +2 for \r\n
-		printf(eventName);
-		auto bioWorldInfo = reinterpret_cast<ABioWorldInfo*>(FindObjectOfType(ABioWorldInfo::StaticClass()));
-		if (bioWorldInfo)
-		{
-			FName foundName;
-			if (CreateName(s2ws(eventName).c_str(), 0, &foundName))
-			{
-				auto localPlayerController = bioWorldInfo->GetLocalPlayerController();
-				if (localPlayerController) {
-					std::wstringstream ss;
-					ss << "ce " << eventName;
-					pendingConsoleCommand.emplace(ss.str());
-				}
-			}
-			else
-			{
-				writeln("Name not found");
-			}
-		}
-		else
-		{
-			writeln("No BioWorldInfo");
-		}
-	}
+	writeMsg("Received command: %hs", str);
+
+	bool handled = LE1GenericCommands::HandleCommand(str);
+	if (!handled) handled = LE1PathfindingGPS::HandleCommand(str);
+	if (!handled) handled = LE1LiveLevelEditor::HandleCommand(str);
+	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
+	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
+
+	//if (strcmp(str, "MGAMERZ_TEST\r\n") == 0)
+	//{
+	//	// Ensure game knows about the file
+	//	CachePackage(L"Y:\\BIOA_MatScreenshot.pcc");
+	//	auto cheatManObj = FindObjectOfType(UBioCheatManager::StaticClass());
+	//	if (cheatManObj)
+	//	{
+	//		auto cheatMan = reinterpret_cast<UBioCheatManager*>(cheatManObj);
+	//		FName levelName;
+	//		CreateName(L"BIOA_MatScreenshot", 0, &levelName);
+	//		cheatMan->StreamLevelIn(levelName);
+	//	}
+	//}
 }
 
 
@@ -486,7 +190,17 @@ SPI_IMPLEMENT_ATTACH
 	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
 	INIT_HOOK_PATTERN(ProcessEvent);
 
-	// MGAMERZ PIPIN'
+	// LE1: Override TLK for user notification
+	INIT_FIND_PATTERN_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00");
+	INIT_HOOK_PATTERN(TLKLookup);
+
+	// Used to dynamically register a package
+	// This is hooked so we can capture the first parameter address
+	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
+	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
+
+
+	// Setup the LEX <-> LE1 pipe
 	char buffer[1024];
 	DWORD dwRead;
 
@@ -533,10 +247,10 @@ SPI_IMPLEMENT_DETACH
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID) {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		GetModuleFileName(hModule, SplashPath, MAX_PATH);
-		PathRemoveFileSpec(SplashPath);
-		PathRemoveFileSpec(SplashPath);
-		StringCchCat(SplashPath, MAX_PATH, L"\\ME3ExpActorDump.txt");
+		//GetModuleFileName(hModule, SplashPath, MAX_PATH);
+		//PathRemoveFileSpec(SplashPath);
+		//PathRemoveFileSpec(SplashPath);
+		//StringCchCat(SplashPath, MAX_PATH, L"\\ME3ExpActorDump.txt");
 	}
 
 	return TRUE;

@@ -12,6 +12,14 @@ SPI_PLUGINSIDE_SEQATTACH;
 
 ME3TweaksASILogger logger("DebugLogger v3", "LE1DebugLogger.log");
 
+// Logs a message from a source
+void logMessage(const wchar_t* logSource, wchar_t* formatStr, void* param1, void* param2)
+{
+	// We have to prepare the formatting string since it's an inbound parameter
+	auto preString = wstring_format(L"%s: %s", logSource, formatStr);
+	logger.writeToLog(wstring_format(preString.data(), param1, param2), true, true);
+}
+
 // Not in the header because this is not part of the game we are hooking.
 typedef void (WINAPI* tOutputDebugStringW)(LPCWSTR lpcszString);
 tOutputDebugStringW OutputDebugStringW_orig = nullptr;
@@ -217,15 +225,35 @@ void LinkerLoadPreload_hook(UnLinker* linker, UObject* objectToLoad)
 //	return nullptr;
 //}
 
-//void EventNotifierAddNotice_hook(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
-//	INT stringRefTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax)
-//{
-//	// GetBioWorldInfo doesn't work. We have to use ghidra offsets, not rely on VC++ since
-//	// compiler might change offsets of our compiled classes
-//	auto bwi = GetBioWorldInfo();
-//	auto eventNotifier = *(int64*)((int64)bwi + 0xb8c); //calculates a pointer, and dereferences it.
-//	EventNotifierAddNotice_orig(bioEventNotifier, nType, nContext, nTimeToLive, nIconIndex, /*stringRefTitle*/157152, strTitle, nQuantity, nQuantMin, nQuantMax);
-//}
+void EventNotifierAddNotice_hook(void* bioEventNotifier, int nType, int nContext, int nTimeToLive, int nIconIndex,
+	INT stringRefTitle, wchar_t* strTitle, int nQuantity, int nQuantMin, int nQuantMax)
+{
+	EventNotifierAddNotice_orig(bioEventNotifier, nType, nContext, nTimeToLive, nIconIndex, /*stringRefTitle*/157152, strTitle, nQuantity, nQuantMin, nQuantMax);
+}
+
+void* GStringManager = nullptr;
+
+typedef FString* (*tTLKLookup)(void* param1, FString* outString, int stringID, BOOL bParse);
+tTLKLookup TLKLookup = nullptr;
+tTLKLookup TLKLookup_orig = nullptr;
+int countBetween = 5;
+FString* TLKLookup_hook(void* param1, FString* outString, int stringID, BOOL bParse)
+{
+	//if (countBetween) {
+	//	std::this_thread::sleep_for(chrono::seconds(countBetween));
+	//	countBetween = 0; // Debugger should attach by now
+	//}
+
+	auto retVal = TLKLookup_orig(param1, outString, stringID, bParse);
+	if (outString && outString->Count > 0) {
+		writeln(L"GetString(%p, %s, %i, %i)", param1, outString->Data, stringID, bParse);
+	}
+	else
+	{
+		//writeln(L"GetString(%p, (null), %i, %i)", param1, stringID, bParse);
+	}
+	return retVal;
+}
 
 void logAllocationFailure(UClass* instancingClass, UObject* outer, FName objClassName, long long loadFlags, UObject* archetype) {
 	char* instancingClassName = instancingClass ? instancingClass->GetFullName() : nullptr;
@@ -247,7 +275,7 @@ UObject* StaticAllocateObject_hook(
 	UObject* outer,
 	FName objClassName,
 	long long loadFlags,
-	UObject* archetype, 
+	UObject* archetype,
 	void* errorDev, // FOutputDevice
 	const wchar_t* a7, // Ghidra shows this is pretty commonly 0
 	void* instancePtr, // Ghidra shows this is pretty commonly 0
@@ -288,6 +316,18 @@ bool hookLoggingFunctions(ISharedProxyInterface* InterfacePtr)
 	//INIT_HOOK_PATTERN(logMemorySmth);
 }
 
+typedef void* (*tSelfPointerFunc)(void* ptr);
+tSelfPointerFunc InputPoll = (tSelfPointerFunc)0x7ff7129ca4f0;
+tSelfPointerFunc InputPoll_orig = nullptr;
+
+
+void* InputPoll_hook(void* ptr)
+{
+	writeln(L"InputPoll: %p", ptr);
+	auto t = InputPoll_orig(ptr);
+	return t;
+}
+
 SPI_IMPLEMENT_ATTACH
 {
 	Common::OpenConsole();
@@ -296,28 +336,37 @@ SPI_IMPLEMENT_ATTACH
 	INIT_CHECK_SDK();
 
 	LoadCommonClassPointers(InterfacePtr);
+	// This is the argument used when looking up TLK strings it seems
+	GStringManager = findAddressLeaMov(InterfacePtr, "GStringManager","48 8b 0d 4f 74 5a 01 4c 8b c7 e8 d7 3f fa ff 48 8b 5c 24 30 48 83 c4 20");
 
 	// Log debug output messages
-	INIT_HOOK_PATTERN(OutputDebugStringW);
-	
+	//INIT_HOOK_PATTERN(OutputDebugStringW);
+
 	// REVERSE ENGINEERING STUFF ----------------------------
 	// Log loading file to string
 	//INIT_FIND_PATTERN_POSTHOOK(appLoadFileToString, /*48 8b c4 55 41*/ " 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 17 fe ff ff ff");
 	//INIT_HOOK_PATTERN(appLoadFileToString);
 
-	// RE: SFXName
-	// When package loads this method is called
-	//INIT_FIND_PATTERN_POSTHOOK(generateNameFromDisk, /*"40 53 48 83 ec*/ "30 49 8b d0 c7 44 24 20 00 00 00 00 45 33 c0 41 b9 01 00 00 00 48 8b d9 e8 5e c6 00 00 48 8b c3");
-	//	INIT_HOOK_PATTERN(generateNameFromDisk);
+	// Works, but not really helpful in this project:
+	// TLK Lookup (seems to be basic version) (strref to string RE)
+	//INIT_FIND_PATTERN_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00");
+	//INIT_HOOK_PATTERN(TLKLookup);
 
-	//INIT_FIND_PATTERN_POSTHOOK(sfxNameConstructor, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00 48 8b 05 fd 2d 5d 01 48 33 c4 48 89 84 24 f0 06 00 00");
-		//INIT_HOOK_PATTERN(sfxNameConstructor);
+	// RE: ToggleDebugCamera
+	// Notes: Method 0xff7129ca4f0 is some sort of input polling
+	// It is called every frame. When you turn on DebugCamera, this method hits a nullpointer
+	// and the game dies
+	// So it's not this method, but that's where the access is done
+	//INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
+	INIT_HOOK_PATTERN(InputPoll);
+
+
 	// -------------------------------------------------------
 
 
 		// Log creating an import for when it fails
-		INIT_FIND_PATTERN_POSTHOOK(CreateImport, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
-		INIT_HOOK_PATTERN(CreateImport);
+		//INIT_FIND_PATTERN_POSTHOOK(CreateImport, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 70 48 c7 45 d0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 63 e2");
+		//INIT_HOOK_PATTERN(CreateImport);
 
 		// FIX ADDR
 		// OBJECT PRELOAD (called on every object in a package file, can be used for seekfree)
@@ -325,23 +374,24 @@ SPI_IMPLEMENT_ATTACH
 		//INIT_HOOK_PATTERN(LinkerLoadPreload);
 
 		// SYNC LOAD PACKAGE
-		INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
-		INIT_HOOK_PATTERN(LoadPackage);
+		//INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
+		//INIT_HOOK_PATTERN(LoadPackage);
 
 		// ASYNC LOAD PACKAGE
-		INIT_FIND_PATTERN_POSTHOOK(LoadPackageAsyncTick, /*"48 8b c4 55 56*/ "57 41 54 41 55 41 56 41 57 48 81 ec 80 00 00 00 48 c7 40 90 fe ff ff ff");
-		INIT_HOOK_PATTERN(LoadPackageAsyncTick);
+		//INIT_FIND_PATTERN_POSTHOOK(LoadPackageAsyncTick, /*"48 8b c4 55 56*/ "57 41 54 41 55 41 56 41 57 48 81 ec 80 00 00 00 48 c7 40 90 fe ff ff ff");
+		//INIT_HOOK_PATTERN(LoadPackageAsyncTick);
 
-	    // When object instances are allocated, if there's an error
-	    // the game dies. This logs which object was being created
-	    // that the game died on
-		INIT_FIND_PATTERN_POSTHOOK(StaticAllocateObject, /*"4c 89 44 24 18*/ "55 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 80 fb ff ff 48 81 ec 80 05 00 00");
-		INIT_HOOK_PATTERN(StaticAllocateObject);
+		// When object instances are allocated, if there's an error
+		// the game dies. This logs which object was being created
+		// that the game died on
+		//INIT_FIND_PATTERN_POSTHOOK(StaticAllocateObject, /*"4c 89 44 24 18*/ "55 56 57 41 54 41 55 41 56 41 57 48 8d ac 24 80 fb ff ff 48 81 ec 80 05 00 00");
+		//INIT_HOOK_PATTERN(StaticAllocateObject);
 
 		// When the Slider's 2DA is loaded for the character creator
-	    // For trying to figure out why merges aren't working to the CC 2DAs
+		// For trying to figure out why merges aren't working to the CC 2DAs
 		//INIT_FIND_PATTERN_POSTHOOK(LoadSlider2DA, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 b8 fc ff ff 48 81 ec 20 04 00 00 48 c7 85 f8 01 00 00 fe ff ff ff")
 		//INIT_HOOK_PATTERN(LoadSlider2DA);
+		
 		//hookLoggingFunctions(InterfacePtr);
 
 		//INIT_FIND_PATTERN_POSTHOOK(EventNotifierAddNotice, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 60 48 c7 45 c0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 8b f1 33 db 48 89 5d c8 48 89 5d d0 48 89 5d d8 48 89 5d e0 48 89 5d e8 48 89 5d f0");

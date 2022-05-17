@@ -1,8 +1,9 @@
+#pragma once
+
 #include <Windows.h>
 #include <cstdio>
 #include <TlHelp32.h>
 
-#pragma once
 
 template<typename T> struct TArray;
 struct FNameEntry;
