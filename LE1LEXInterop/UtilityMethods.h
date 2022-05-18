@@ -1,10 +1,6 @@
 #pragma once
 
 // LEX COMMUNICATIONS
-struct ME3ExpMsg
-{
-	wchar_t msg[100];
-};
 
 char* GetUObjectClassName(UObject* object)
 {
@@ -38,39 +34,31 @@ char* GetContainingMapName(UObject* object)
 	return "(null)";
 }
 
-wchar_t msgBuffer[512];
-wchar_t* msgPtr;
-int writePos = 0;
-void WriteToMsgBuffer(const wchar_t* wstr, const int len, const bool msgStart = false) {
-	if (msgStart)
-	{
-		if (writePos > 400)
-		{
-			writePos = 0;
-		}
-		msgPtr = msgBuffer + writePos;
-	}
-	else
-	{
-		msgBuffer[writePos] = ' ';
-		writePos++;
-	}
-	for (auto i = 0; i < len && wstr[i] != 0 && writePos < 512; i++, writePos++)
-	{
-		msgBuffer[writePos] = wstr[i];
-	}
+inline std::wostream& operator<< (std::wostream& out, FString const& fString)
+{
+	out.write(fString.Data, fString.Count);
+	return out;
 }
 
-void WriteToMsgBuffer(const FString& fstr, const bool msgStart = false) {
-	WriteToMsgBuffer(fstr.Data, fstr.Count, msgStart);
-}
-
-void WriteToMsgBuffer(wstring wstr, const bool msgStart = false) {
-	WriteToMsgBuffer(wstr.c_str(), wstr.length(), msgStart);
+// Strings sent to LEX should use the following format:
+// [FEATURENAME] [Args...]
+// e.g. PATHFINDING_GPS PLAYERLOC=1,2,3
+void SendStringToLEX(const wstring& wstr) {
+	if (const auto handle = FindWindow(nullptr, L"Legendary Explorer"))
+	{
+		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
+		COPYDATASTRUCT cds;
+		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
+		cds.dwData = SENT_FROM_LE1;
+		cds.cbData = (wstr.length() + 1) * sizeof(wchar_t);
+		cds.lpData = PVOID(wstr.c_str());
+		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
+	}
 }
 
 void SendMessageToLEX(USequenceOp* op)
 {
+	wstringstream wss;
 	const auto numVarLinks = op->VariableLinks.Num();
 	for (auto i = 0; i < numVarLinks; i++)
 	{
@@ -81,81 +69,37 @@ void SendMessageToLEX(USequenceOp* op)
 			if (!_wcsnicmp(varLink.LinkDesc.Data, L"MessageName", 12) && IsA<USeqVar_String>(seqVar))
 			{
 				const USeqVar_String* strVar = static_cast<USeqVar_String*>(seqVar);
-				WriteToMsgBuffer(strVar->StrValue, true);
+				wss << strVar->StrValue;
 			}
 			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"String", 7) && IsA<USeqVar_String>(seqVar))
 			{
 				const USeqVar_String* strVar = static_cast<USeqVar_String*>(seqVar);
-				WriteToMsgBuffer(L"string", 7);
-				WriteToMsgBuffer(strVar->StrValue);
+				wss << L" string " << strVar->StrValue;
 			}
 			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Vector", 7) && IsA<USeqVar_Vector>(seqVar))
 			{
 				const USeqVar_Vector* vectorVar = static_cast<USeqVar_Vector*>(seqVar);
-				WriteToMsgBuffer(L"vector", 7);
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.X));
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.Y));
-				WriteToMsgBuffer(to_wstring(vectorVar->VectValue.Z));
+				wss << L" vector " << vectorVar->VectValue.X << L" " << vectorVar->VectValue.Y << L" " << vectorVar->VectValue.Z;
 			}
 			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Float", 5) && IsA<USeqVar_Float>(seqVar))
 			{
 				const USeqVar_Float* floatVar = static_cast<USeqVar_Float*>(seqVar);
-				WriteToMsgBuffer(L"float", 6);
-				WriteToMsgBuffer(to_wstring(floatVar->FloatValue));
+				wss << L" float " << floatVar->FloatValue;
 			}
 			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Int", 3) && IsA<USeqVar_Int>(seqVar))
 			{
 				const USeqVar_Int* intVar = static_cast<USeqVar_Int*>(seqVar);
-				WriteToMsgBuffer(L"int", 4);
-				WriteToMsgBuffer(to_wstring(intVar->IntValue));
+				wss << L" int " << intVar->IntValue;
 			}
 			else if (!_wcsnicmp(varLink.LinkDesc.Data, L"Bool", 4) && IsA<USeqVar_Bool>(seqVar))
 			{
 				const USeqVar_Bool* boolVar = static_cast<USeqVar_Bool*>(seqVar);
-				WriteToMsgBuffer(L"bool", 5);
-				WriteToMsgBuffer(to_wstring(boolVar->bValue));
+				wss << L" bool " << boolVar->bValue;
 			}
 		}
 	}
-	msgBuffer[writePos] = 0;
-	writePos++;
-	auto handle = FindWindow(nullptr, L"Legendary Explorer");
-	if (handle)
-	{
-		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
-		ME3ExpMsg msg;
-		const auto len = writePos - (msgPtr - msgBuffer);
-		wcsncpy_s(msg.msg, msgPtr, len);
-		COPYDATASTRUCT cds;
-		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
-		cds.dwData = SENT_FROM_LE1;
-		cds.cbData = sizeof(msg);
-		cds.lpData = &msg;
-		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
-	}
-}
-
-// Strings sent to LEX should use the following format:
-// [FEATURENAME] [Args...]
-// e.g. PATHFINDING_GPS PLAYERLOC=1,2,3
-void SendStringToLEX(wstring wstr) {
-	WriteToMsgBuffer(wstr, true);
-	msgBuffer[writePos] = 0;
-	writePos++;
-	auto handle = FindWindow(nullptr, L"Legendary Explorer");
-	if (handle)
-	{
-		constexpr unsigned long SENT_FROM_LE1 = 0x02AC00C7;
-		ME3ExpMsg msg;
-		const auto len = writePos - (msgPtr - msgBuffer);
-		wcsncpy_s(msg.msg, msgPtr, /*len*/_TRUNCATE); // dies here if you use len with long strings
-		COPYDATASTRUCT cds;
-		ZeroMemory(&cds, sizeof(COPYDATASTRUCT));
-		cds.dwData = SENT_FROM_LE1;
-		cds.cbData = sizeof(msg);
-		cds.lpData = &msg;
-		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
-	}
+	const wstring msg = wss.str();
+	SendStringToLEX(msg);
 }
 
 
