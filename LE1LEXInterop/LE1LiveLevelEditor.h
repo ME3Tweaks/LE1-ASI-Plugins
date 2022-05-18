@@ -4,7 +4,8 @@ class LE1LiveLevelEditor
 {
 public:
 	static TArray<UObject*> Actors;
-
+	static AActor* SelectedActor;
+	static bool DrawLineToSelected;
 private:
 	static void DumpActors()
 	{
@@ -30,6 +31,8 @@ private:
 				}
 			}
 		}
+
+		// This originally used to count first but that was removed for other design issues
 
 		// Tell LEX we're about to send over an actor list, so it can clear it and be ready for new data.
 		SendStringToLEX(L"LIVELEVELEDITOR ACTORDUMPSTART");
@@ -114,9 +117,9 @@ private:
 		}
 	}
 
-	static void SendActorPositionData(char* mapName, char* actorName)
-	{
-		writeln(L"Looking for: %hs", actorName);
+	// Gets an actor with the specified full name from the specified map file in memory
+	static void UpdateSelectedActor(char* mapName, char* actorName) {
+		//writeln(L"Selecting act for: %hs", actorName);
 		const auto objCount = UObject::GObjObjects()->Count;
 		const auto objArray = UObject::GObjObjects()->Data;
 
@@ -130,56 +133,117 @@ private:
 					continue; // Go to next object.
 
 				auto name = obj->GetFullName(false);
-				writeln(L"%hs", name);
+				//writeln(L"%hs", name);
 				if (strcmp(actorName, name) == 0)
 				{
-					auto actor = static_cast<AActor*>(obj);
-					std::wstringstream ss1;
-					ss1 << "LIVELEVELEDITOR ACTORLOC " << actor->Location.X << " " << actor->Location.Y << " " << actor->Location.Z;
-					SendStringToLEX(ss1.str());
-
-					std::wstringstream ss2;
-					ss2 << "LIVELEVELEDITOR ACTORROT " << actor->Rotation.Pitch << " " << actor->Rotation.Yaw << " " << actor->Rotation.Roll;
-					SendStringToLEX(ss2.str());
+					SendStringToLEX(L"LIVELEVELEDITOR ACTORSELECTED"); // We have selected an actor
+					SelectedActor = static_cast<AActor*>(obj);
+					return;
 				}
 			}
 		}
+
+		SendStringToLEX(L"LIVELEVELEDITOR ACTORSELECTED"); // We didn't find an actor but we finished the selection routine.
+		SelectedActor = nullptr; // Didn't find!
 	}
 
+	static void SendActorData()
+	{
+		if (SelectedActor) {
+			std::wstringstream ss1;
+			ss1 << "LIVELEVELEDITOR ACTORLOC " << SelectedActor->Location.X << " " << SelectedActor->Location.Y << " " << SelectedActor->Location.Z;
+			SendStringToLEX(ss1.str());
+
+			std::wstringstream ss2;
+			ss2 << "LIVELEVELEDITOR ACTORROT " << SelectedActor->Rotation.Pitch << " " << SelectedActor->Rotation.Yaw << " " << SelectedActor->Rotation.Roll;
+			SendStringToLEX(ss2.str());
+
+			std::wstringstream ss3;
+			ss3 << "LIVELEVELEDITOR ACTORDS3D " << SelectedActor->DrawScale3D.X << " " << SelectedActor->DrawScale3D.Y << " " << SelectedActor->DrawScale3D.Z;
+			SendStringToLEX(ss3.str());
+		}
+	}
+
+	static void SetActorPosition(float x, float y, float z)
+	{
+		if (SelectedActor) {
+			FVector f;
+			f.X = x;
+			f.Y = y;
+			f.Z = z;
+			SelectedActor->SetLocation(f);
+		}
+	}
+
+	static void SetActorRotation(int pitch, int yaw, int roll)
+	{
+		if (SelectedActor) {
+			FRotator f;
+			f.Pitch = pitch;
+			f.Yaw = yaw;
+			f.Roll = roll;
+			SelectedActor->SetRotation(f);
+		}
+	}
+
+	static void SetActorDrawScale3D(float scaleX, float scaleY, float scaleZ)
+	{
+		if (SelectedActor) {
+			FVector f;
+			f.X = scaleX;
+			f.Y = scaleY;
+			f.Z = scaleZ;
+			SelectedActor->SetDrawScale3D(f);
+		}
+	}
+
+
+	// Parses the input string (starting at pos) and returns the lookup string, also returning the end position
+	// (as an offset) from the beginning position of the string.
+	static int GetActorInfoFromIDString(char* inputString, char*& outMapName, char*& outFullPath)
+	{
+		// Parse 2 parts: Filename, ObjectPath
+		int mapNameLen = 0;
+		while (*(inputString + mapNameLen) != ' ')
+		{
+			mapNameLen++;
+		}
+
+		outMapName = substr(inputString, 0, mapNameLen);
+
+		// Remember to +1 to skip the space.
+		int fullPathLen = 0;
+
+		while (*(inputString + mapNameLen + fullPathLen + 1) != ' ')
+		{
+			fullPathLen++;
+		}
+
+		outFullPath = substr(inputString, mapNameLen + 1, fullPathLen);
+
+		return mapNameLen + 1 + fullPathLen; // 'mapName Full.Path.Here'
+	}
+
+
 public:
-	// Return false if other features shouldn't be able to also handle this function call
 	// Return true if other features should also be able to handle this function call
+	// Return false if other features shouldn't be able to also handle this function call
 	static bool ProcessEvent(UObject* Context, UFunction* Function, void* Parms, void* Result)
 	{
-		auto className = Context->GetName();
-		/*if (strcmp(className, "SeqAct_LEXDumpActors") == 0)
+		if (SelectedActor == nullptr)
+			return true; // We have nothing to handle here
+
+		// PostRender
+		auto funcName = Function->GetName();
+		if (strcmp(funcName, "PostRender") == 0 )
 		{
-			if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
+			auto hud = reinterpret_cast<ABioHUD*>(Context);
+			if (hud != nullptr)
 			{
-				const auto op = static_cast<USequenceOp*>(Context);
-				DumpActors(op);
+				hud->FlushPersistentDebugLines(); // Clear it out
+				hud->DrawDebugLine(SharedData::cachedPlayerPosition, SelectedActor->Location, 255, 255, 255, TRUE);
 			}
 		}
-		else*/
-		if (strcmp(className, "SeqAct_LEXAccessDumpedActorsList") == 0)
-		{
-			// What is this used for? -Mgamerz
-			if (!strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated"))
-			{
-				const auto op = static_cast<USequenceOp*>(Context);
-				AccessDumpedActorsList(op);
-				return false;
-			}
-		}
-		/*else if (strcmp(className, "SeqAct_LEXGetPlayerCamPOV") == 0)
-		{
-			if (strcmp(Function->GetFullName(), "Function Engine.SequenceOp.Activated") == 0)
-			{
-				const auto op = static_cast<USequenceOp*>(Context);
-				GetCamPOV(op);
-				return false;
-			}
-		}*/
 		return true;
 	}
 
@@ -200,18 +264,89 @@ public:
 			return true;
 		}
 
-		if (startsWith("LLE_GET_ACTOR_POSDATA ", command))
+		//if (startsWith("LLE_GET_ACTOR_POSDATA ", command))
+		//{
+		//	// This is mega jank
+		//	auto commandLen = strlen(command) - 22 - 2; // 22 is command len (plus space), -2 for \r\n
+		//	auto remainingCmd = substr(command, 22, commandLen); // string part after the last one
+		//	auto splitPos = strstr(remainingCmd, " ");
+		//	auto mapName = substr(remainingCmd, 0, splitPos - remainingCmd);
+		//	remainingCmd = remainingCmd + (splitPos - remainingCmd) + 1;
+		//	auto objName = substr(remainingCmd, 0, strlen(remainingCmd));
+
+
+		//	SendActorPositionData(mapName, objName);
+		//	return true;
+		//}
+
+		if (startsWith("LLE_SELECT_ACTOR ", command))
+		{
+			auto subCommand = command + 17;
+			char* mapName = nullptr;
+			char* objName = nullptr;
+			GetActorInfoFromIDString(subCommand, mapName, objName);
+			UpdateSelectedActor(mapName, objName);
+			return true;
+		}
+
+		if (startsWith("LLE_GET_ACTOR_POSDATA", command))
+		{
+			SendActorData();
+			return true;
+		}
+
+		if (startsWith("LLE_UPDATE_ACTOR_POS ", command))
+		{
+			auto subCommand = command + 21;
+
+			// Get the values
+			std::string s = subCommand;
+			auto posX = std::stof(s.substr(0, s.find(' ')));
+			s = s.substr(s.find(' ') + 1);
+
+			auto posY = std::stof(s.substr(0, s.find(' ')));
+
+			s = s.substr(s.find(' ') + 1);
+			auto posZ = std::stof(s.substr(0, s.find(' ')));
+
+			SetActorPosition(posX, posY, posZ);
+			return true;
+		}
+
+		if (startsWith("LLE_UPDATE_ACTOR_ROT ", command))
 		{
 			// This is mega jank
-			auto commandLen = strlen(command) - 22 - 2; // 22 is command len (plus space), -2 for \r\n
-			auto remainingCmd = substr(command, 22, commandLen); // string part after the last one
-			auto splitPos = strstr(remainingCmd, " ");
-			auto mapName = substr(remainingCmd, 0, splitPos - remainingCmd);
-			remainingCmd = remainingCmd + (splitPos - remainingCmd) + 1;
-			auto objName = substr(remainingCmd, 0, strlen(remainingCmd));
+			auto subCommand = command + 21;
 
+			std::string s = subCommand;
+			auto pitch = std::stoi(s.substr(0, s.find(' ')));
+			s = s.substr(s.find(' ') + 1);
 
-			SendActorPositionData(mapName, objName);
+			auto yaw = std::stoi(s.substr(0, s.find(' ')));
+
+			s = s.substr(s.find(' ') + 1);
+			auto roll = std::stoi(s.substr(0, s.find(' ')));
+
+			SetActorRotation(pitch, yaw, roll);
+			return true;
+		}
+
+		if (startsWith("LLE_SET_ACTOR_DRAWSCALE3D ", command))
+		{
+			// This is mega jank
+			auto subCommand = command + 26;
+
+			// Get the values
+			std::string s = subCommand;
+			auto scaleX = std::stof(s.substr(0, s.find(' ')));
+			s = s.substr(s.find(' ') + 1);
+
+			auto scaleY = std::stof(s.substr(0, s.find(' ')));
+
+			s = s.substr(s.find(' ') + 1);
+			auto scaleZ = std::stof(s.substr(0, s.find(' ')));
+
+			SetActorDrawScale3D(scaleX, scaleY, scaleZ);
 			return true;
 		}
 
@@ -221,3 +356,5 @@ public:
 
 // Static variable initialization
 TArray<UObject*> LE1LiveLevelEditor::Actors = TArray<UObject*>();
+AActor* LE1LiveLevelEditor::SelectedActor = nullptr;
+bool LE1LiveLevelEditor::DrawLineToSelected = true;

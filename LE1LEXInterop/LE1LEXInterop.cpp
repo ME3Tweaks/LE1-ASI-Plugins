@@ -133,6 +133,8 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 	// Implementations should take care to allow follow up invocations if it might be appropriate
 	// This is a debug tool; performance loss is to be expected
 
+	SharedData::ProcessEvent(Context, Function, Parms, Result); // Update the shared data automatically
+
 	bool continueChecking = LEXCommunications::ProcessEvent(Context, Function, Parms, Result);
 	if (continueChecking) continueChecking = LE1PathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
 	if (continueChecking) continueChecking = LE1LiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
@@ -154,7 +156,15 @@ void sendInGameNotification(wchar_t* shortMessage, int tlkIDToUse)
 
 void ProcessCommand(char str[1024], DWORD dword)
 {
-	writeMsg("Received command: %hs", str);
+	// Remove /r/n
+	auto test = str;
+	while (*test != '\r')
+	{
+		test++;
+	}
+	*test = 0; // This will remove \r\n from the string
+
+	writeln("Received command: %hs", str);
 
 	bool handled = LE1GenericCommands::HandleCommand(str);
 	if (!handled) handled = LE1PathfindingGPS::HandleCommand(str);

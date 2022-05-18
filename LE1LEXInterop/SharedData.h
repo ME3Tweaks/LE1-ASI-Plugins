@@ -7,6 +7,9 @@ public:
 	// The player camera POV
 	static FTPOV cachedPlayerPOV;
 
+	// The player location
+	static FVector cachedPlayerPosition;
+
 	// Method should always return true; this method collects data automatically for other features to use
 
 	// Return false if other features shouldn't be able to also handle this function call
@@ -18,6 +21,7 @@ public:
 			const auto playerController = static_cast<ABioPlayerController*>(Context);
 			if (playerController) {
 				cachedPlayerPOV = playerController->PlayerCamera->CameraCache.POV;
+				cachedPlayerPosition = playerController->Pawn ? playerController->Pawn->Location : cachedPlayerPosition;
 			}
 		}
 
@@ -25,3 +29,7 @@ public:
 		return true;
 	}
 };
+
+// Static variable initialization
+FTPOV SharedData::cachedPlayerPOV = FTPOV();
+FVector SharedData::cachedPlayerPosition = FVector();

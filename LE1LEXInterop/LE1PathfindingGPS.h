@@ -26,8 +26,8 @@ public:
 		return false; // Was not handled
 	}
 
-	// Return false if other features shouldn't be able to also handle this function call
 	// Return true if other features should also be able to handle this function call
+	// Return false if other features shouldn't be able to also handle this function call
 	static bool ProcessEvent(UObject* Context, UFunction* Function, void* Parms, void* Result)
 	{
 		if (LE1PathfindingGPS::playerGPSActive && IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
@@ -47,8 +47,9 @@ public:
 					SendStringToLEX(ss2.str());
 				}
 			}
-			return true; // Other features can use this function call
 		}
+
+		return true; // Other features can use this function call
 	}
 };
 
