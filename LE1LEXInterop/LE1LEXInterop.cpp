@@ -15,6 +15,9 @@
 #include "LEXLE1Interop.h"
 #include "UtilityMethods.h"
 
+// Game: LE1
+#define LE1
+
 // Global data handlers
 #include "SharedData.h"
 #include "StaticVariablePointers.h"
@@ -24,7 +27,7 @@
 #include "LE1AnimViewer.h"
 #include "LE1GenericCommands.h"
 #include "LE1PathfindingGPS.h"
-#include "LE1LiveLevelEditor.h"
+#include "LELiveLevelEditor.h"
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -100,7 +103,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 
 	bool continueChecking = LEXCommunications::ProcessEvent(Context, Function, Parms, Result);
 	if (continueChecking) continueChecking = LE1PathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
-	if (continueChecking) continueChecking = LE1LiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
+	if (continueChecking) continueChecking = LELiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
 
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
@@ -131,7 +134,7 @@ void ProcessCommand(char str[1024], DWORD dword)
 
 	bool handled = LE1GenericCommands::HandleCommand(str);
 	if (!handled) handled = LE1PathfindingGPS::HandleCommand(str);
-	if (!handled) handled = LE1LiveLevelEditor::HandleCommand(str);
+	if (!handled) handled = LELiveLevelEditor::HandleCommand(str);
 	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
 	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
 }

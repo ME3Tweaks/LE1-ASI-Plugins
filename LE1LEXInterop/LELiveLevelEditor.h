@@ -3,7 +3,7 @@
 // Typedefs
 typedef BOOL (*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove);
 
-class LE1LiveLevelEditor
+class LELiveLevelEditor
 {
 public:
 	static TArray<UObject*> Actors;
@@ -252,13 +252,23 @@ private:
 		if (initialized)
 			return true;
 
-		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00 f6 82 70 02 00 00 01 45 8b f1 49 8b d8 48 8b fa 4c 8b e1 75 0c f7 82 74 02 00 00 00 00 04 00");
-
+		// LE1 and LE2 have same byte signature
+#if defined(LE1) || defined(LE2)
+		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54	40 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00");
 		BYTE instructionChange0[] = { 0x26 }; // REL OFFSET
 		PatchMemory((void*)((int64)FarMoveActor + 40), instructionChange0, 1); // Change JNZ jump offset to point to location test code (post checks)
 
 		BYTE instructionChange[] = { 0xEB }; // JMP NEAR
 		PatchMemory((void*)((int64)FarMoveActor + 51), instructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
+#endif
+
+#ifdef LE3
+		BYTE instructionChange0[] = { 0x26 }; // REL OFFSET
+		PatchMemory((void*)((int64)FarMoveActor + 40), instructionChange0, 1); // Change JNZ jump offset to point to location test code (post checks)
+
+		BYTE instructionChange[] = { 0xEB }; // JMP NEAR
+		PatchMemory((void*)((int64)FarMoveActor + 51), instructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
+#endif
 		//NopOutMemory((void*)((int64)FarMoveActor + 20), 59); //0x
 		initialized = true;
 
@@ -398,8 +408,8 @@ public:
 };
 
 // Static variable initialization
-bool LE1LiveLevelEditor::initialized = false;
-TArray<UObject*> LE1LiveLevelEditor::Actors = TArray<UObject*>();
-AActor* LE1LiveLevelEditor::SelectedActor = nullptr;
-bool LE1LiveLevelEditor::DrawLineToSelected = true;
-tFarMoveActor LE1LiveLevelEditor::FarMoveActor = nullptr;
+bool LELiveLevelEditor::initialized = false;
+TArray<UObject*> LELiveLevelEditor::Actors = TArray<UObject*>();
+AActor* LELiveLevelEditor::SelectedActor = nullptr;
+bool LELiveLevelEditor::DrawLineToSelected = true;
+tFarMoveActor LELiveLevelEditor::FarMoveActor = nullptr;
