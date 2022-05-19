@@ -1,6 +1,41 @@
 #pragma once
 
-// LEX COMMUNICATIONS
+// Not sure this works!
+bool NopOutMemory(void* startPos, int patchSize)
+{
+	//make the memory we're going to patch writeable
+	DWORD  oldProtect;
+	if (!VirtualProtect(startPos, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
+		return false;
+
+	// Nop it out
+	writeln(L"Nopping memory: %p for %i bytes" , startPos, patchSize);
+	for(int i = 0; i < patchSize; i++)
+	{
+		*(char*)((int64)startPos + i) = 0x90; // This line only has 3 underlines in visual studio
+	}
+
+	//restore the memory's old protection level
+	VirtualProtect(startPos, patchSize, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), startPos, patchSize);
+	return true;
+}
+
+bool PatchMemory(void* address, const void* patch, const SIZE_T patchSize)
+{
+	//make the memory we're going to patch writeable
+	DWORD  oldProtect;
+	if (!VirtualProtect(address, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
+		return false;
+
+	//overwrite with our patch
+	memcpy(address, patch, patchSize);
+
+	//restore the memory's old protection level
+	VirtualProtect(address, patchSize, oldProtect, &oldProtect);
+	FlushInstructionCache(GetCurrentProcess(), address, patchSize);
+	return true;
+}
 
 char* GetUObjectClassName(UObject* object)
 {
@@ -118,21 +153,4 @@ void CacheContentWrapper_hook(void* parm1, wchar_t* filePath, bool replaceIfExis
 {
 	CacheContentWrapperClassPointer = parm1;
 	CacheContentWrapper_orig(parm1, filePath, replaceIfExisting, warnIfExists);
-}
-
-typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
-tSFXNameConstructor sfxNameConstructor = nullptr;
-// Creates a new name in the game process.
-// Note: return value is not used; it only indicates if locating the name generation function succeeded
-BOOL CreateName(const wchar_t* name, int number, FName* outName)
-{
-	if (sfxNameConstructor == nullptr)
-	{
-		// This is so we can use the macro for slightly cleaner code.
-		auto InterfacePtr = SPIInterfacePtr;
-		INIT_FIND_PATTERN_POSTHOOK(sfxNameConstructor, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 81 ec 00 07 00 00 48 c7 44 24 50 fe ff ff ff 48 89 9c 24 50 07 00 00 48 8b 05 fd 2d 5d 01 48 33 c4 48 89 84 24 f0 06 00 00");
-	}
-
-	sfxNameConstructor(outName, name, number, TRUE, 0);
-	return TRUE; // We made a name
 }

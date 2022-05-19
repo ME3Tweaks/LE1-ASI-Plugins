@@ -6,8 +6,7 @@
 #include "../LE1-SDK/Common.h"
 #include "../LE1-SDK/ME3TweaksHeader.h"
 
-// Globally shared variables
-ISharedProxyInterface* SPIInterfacePtr;
+// We should have a #define to make string formatting not suck
 
 // Checks if a string starts with another
 bool startsWith(const char* pre, const char* str)

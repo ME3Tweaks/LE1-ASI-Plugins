@@ -14,7 +14,7 @@ public:
 			if (bioWorldInfo)
 			{
 				FName foundName;
-				CreateName(s2ws(eventName).c_str(), 0, &foundName);
+				StaticVariables::CreateName(s2ws(eventName).c_str(), 0, &foundName);
 				bioWorldInfo->eventCauseEvent(foundName);
 			}
 			return true;
@@ -30,7 +30,7 @@ public:
 			{
 				auto cheatMan = reinterpret_cast<UBioCheatManager*>(cheatManObj);
 				FName levelName;
-				CreateName(s2ws(levelNameStr).c_str(), 0, &levelName);
+				StaticVariables::CreateName(s2ws(levelNameStr).c_str(), 0, &levelName);
 				cheatMan->StreamLevelIn(levelName);
 			}
 			return true;
@@ -46,7 +46,7 @@ public:
 			{
 				auto cheatMan = reinterpret_cast<UBioCheatManager*>(cheatManObj);
 				FName levelName;
-				CreateName(s2ws(levelNameStr).c_str(), 0, &levelName);
+				StaticVariables::CreateName(s2ws(levelNameStr).c_str(), 0, &levelName);
 				cheatMan->StreamLevelOut(levelName);
 			}
 			return true;

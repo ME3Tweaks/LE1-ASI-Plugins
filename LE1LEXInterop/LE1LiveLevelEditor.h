@@ -1,5 +1,8 @@
 #pragma once
 
+// Typedefs
+typedef BOOL (*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove);
+
 class LE1LiveLevelEditor
 {
 public:
@@ -7,8 +10,10 @@ public:
 	static AActor* SelectedActor;
 	static bool DrawLineToSelected;
 private:
+	static bool initialized;
 	static void DumpActors()
 	{
+		SelectedActor = nullptr; // We deselect the actor
 		const auto objCount = UObject::GObjObjects()->Count;
 		const auto objArray = UObject::GObjObjects()->Data;
 
@@ -41,26 +46,37 @@ private:
 		int numSent = 0;
 		for (int i = 0; i < Actors.Count; i++)
 		{
-			auto actor = static_cast<AActor*>(Actors.Data[i]);
-			if (actor)
+			if (Actors.Data[i]->IsA(actorClass))
 			{
+				auto actor = static_cast<AActor*>(Actors.Data[i]);
+
 				// String interps in C++ :/
 				std::wstringstream ss2; // This is not declared outside the loop cause otherwise it carries forward
 				ss2 << "LIVELEVELEDITOR ACTORINFO ";
 
 				const auto name = actor->Name.GetName();
-				ss2 << GetContainingMapName(actor) << ":" << name;
+				ss2 << "MAP=" << GetContainingMapName(actor);
+				ss2 << ":ACTORNAME=" << name;
 				const auto index = actor->Name.Number;
 				if (index > 0)
 				{
 					ss2 << '_' << index - 1;
 				}
-				if (actor->bStatic || !actor->bMovable)
+
+				/*if (actor->bStatic || !actor->bMovable)
 				{
 					ss2 << ":static";
+				}*/
+
+				auto tag = actor->Tag.GetName();
+				if (strlen(tag) > 0 && _strcmpi(tag, actor->Class->GetName()) != 0)
+				{
+					// Tag != ClassName
+					ss2 << ":TAG=" << tag;
 				}
 
 				numSent++;
+				ss2 << L"\0";
 				SendStringToLEX(ss2.str());
 			}
 		}
@@ -152,26 +168,31 @@ private:
 		if (SelectedActor) {
 			std::wstringstream ss1;
 			ss1 << "LIVELEVELEDITOR ACTORLOC " << SelectedActor->Location.X << " " << SelectedActor->Location.Y << " " << SelectedActor->Location.Z;
+			ss1 << L"\0";
 			SendStringToLEX(ss1.str());
 
 			std::wstringstream ss2;
 			ss2 << "LIVELEVELEDITOR ACTORROT " << SelectedActor->Rotation.Pitch << " " << SelectedActor->Rotation.Yaw << " " << SelectedActor->Rotation.Roll;
+			ss2 << L"\0";
 			SendStringToLEX(ss2.str());
 
 			std::wstringstream ss3;
 			ss3 << "LIVELEVELEDITOR ACTORDS3D " << SelectedActor->DrawScale3D.X << " " << SelectedActor->DrawScale3D.Y << " " << SelectedActor->DrawScale3D.Z;
+			ss3 << L"\0";
 			SendStringToLEX(ss3.str());
 		}
 	}
 
 	static void SetActorPosition(float x, float y, float z)
 	{
-		if (SelectedActor) {
+		if (SelectedActor && FarMoveActor) {
 			FVector f;
 			f.X = x;
 			f.Y = y;
 			f.Z = z;
-			SelectedActor->SetLocation(f);
+
+			FarMoveActor(StaticVariables::GWorld(), SelectedActor, f, 0, 1, 0);
+			//SelectedActor->SetLocation(f);
 		}
 	}
 
@@ -196,7 +217,6 @@ private:
 			SelectedActor->SetDrawScale3D(f);
 		}
 	}
-
 
 	// Parses the input string (starting at pos) and returns the lookup string, also returning the end position
 	// (as an offset) from the beginning position of the string.
@@ -224,6 +244,26 @@ private:
 		return mapNameLen + 1 + fullPathLen; // 'mapName Full.Path.Here'
 	}
 
+	static tFarMoveActor FarMoveActor;
+
+	// Return type means nothing; only for using the macro
+	static bool Initialize(ISharedProxyInterface* InterfacePtr)
+	{
+		if (initialized)
+			return true;
+
+		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00 f6 82 70 02 00 00 01 45 8b f1 49 8b d8 48 8b fa 4c 8b e1 75 0c f7 82 74 02 00 00 00 00 04 00");
+
+		BYTE instructionChange0[] = { 0x26 }; // REL OFFSET
+		PatchMemory((void*)((int64)FarMoveActor + 40), instructionChange0, 1); // Change JNZ jump offset to point to location test code (post checks)
+
+		BYTE instructionChange[] = { 0xEB }; // JMP NEAR
+		PatchMemory((void*)((int64)FarMoveActor + 51), instructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
+		//NopOutMemory((void*)((int64)FarMoveActor + 20), 59); //0x
+		initialized = true;
+
+		return true;
+	}
 
 public:
 	// Return true if other features should also be able to handle this function call
@@ -235,7 +275,7 @@ public:
 
 		// PostRender
 		auto funcName = Function->GetName();
-		if (strcmp(funcName, "PostRender") == 0 )
+		if (strcmp(funcName, "PostRender") == 0)
 		{
 			auto hud = reinterpret_cast<ABioHUD*>(Context);
 			if (hud != nullptr)
@@ -253,6 +293,9 @@ public:
 	{
 		if (startsWith("LLE_TEST_ACTIVE", command))
 		{
+			if (!initialized)
+				Initialize(SharedData::SPIInterfacePtr);
+
 			// We can receive this command, so we are ready
 			SendStringToLEX(L"LIVELEVELEDITOR READY");
 			return true;
@@ -355,6 +398,8 @@ public:
 };
 
 // Static variable initialization
+bool LE1LiveLevelEditor::initialized = false;
 TArray<UObject*> LE1LiveLevelEditor::Actors = TArray<UObject*>();
 AActor* LE1LiveLevelEditor::SelectedActor = nullptr;
 bool LE1LiveLevelEditor::DrawLineToSelected = true;
+tFarMoveActor LE1LiveLevelEditor::FarMoveActor = nullptr;

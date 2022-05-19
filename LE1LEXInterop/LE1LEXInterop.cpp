@@ -15,8 +15,11 @@
 #include "LEXLE1Interop.h"
 #include "UtilityMethods.h"
 
-// Featureset
+// Global data handlers
 #include "SharedData.h"
+#include "StaticVariablePointers.h"
+
+// Featureset
 #include "LEXCommunications.h"
 #include "LE1AnimViewer.h"
 #include "LE1GenericCommands.h"
@@ -28,7 +31,6 @@
 // ID to pass to the notification system when GPS ones are issued
 #define TLK_STRID_GPS 102568922
 
-
 SPI_PLUGINSIDE_SUPPORT(L"LE1 LEX Interop", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
@@ -36,45 +38,6 @@ SPI_PLUGINSIDE_ASYNCATTACH;
 TCHAR SplashPath[MAX_PATH];
 HANDLE hPipe;
 LPOVERLAPPED pipeOverlap;
-
-
-
-
-// This is done via SharedData now on every tick
-//void GetCamPOV(USequenceOp* const op)
-//{
-//	const auto numVarLinks = op->VariableLinks.Num();
-//	for (auto i = 0; i < numVarLinks; i++)
-//	{
-//
-//		if (op->VariableLinks(i).LinkedVariables.Count == 0)
-//		{
-//			continue;
-//		}
-//		const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-//		if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Position", 10) && IsA<USeqVar_Vector>(seqVar))
-//		{
-//			const auto posVar = static_cast<USeqVar_Vector*>(seqVar);
-//			posVar->VectValue = SharedData::cachedPlayerPOV.Location;
-//		}
-//		else if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Rotation", 10) && IsA<USeqVar_Vector>(seqVar))
-//		{
-//			const auto pitch = ToRadians(SharedData::cachedPlayerPOV.Rotation.Pitch);
-//			const auto yaw = ToRadians(SharedData::cachedPlayerPOV.Rotation.Yaw);
-//			const auto cp = cos(pitch);
-//			const auto sp = sin(pitch);
-//			const auto cy = cos(yaw);
-//			const auto sy = sin(yaw);
-//			FVector rotVect;
-//			rotVect.X = cp * cy;
-//			rotVect.Y = cp * sy;
-//			rotVect.Z = sp;
-//
-//			auto* rotVar = static_cast<USeqVar_Vector*>(seqVar);
-//			rotVar->VectValue = rotVect;
-//		}
-//	}
-//}
 
 #pragma region TLKLookup
 // TLK lookups to keys in this map will return the data by their key instead of their original data.
@@ -171,20 +134,6 @@ void ProcessCommand(char str[1024], DWORD dword)
 	if (!handled) handled = LE1LiveLevelEditor::HandleCommand(str);
 	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
 	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
-
-	//if (strcmp(str, "MGAMERZ_TEST\r\n") == 0)
-	//{
-	//	// Ensure game knows about the file
-	//	CachePackage(L"Y:\\BIOA_MatScreenshot.pcc");
-	//	auto cheatManObj = FindObjectOfType(UBioCheatManager::StaticClass());
-	//	if (cheatManObj)
-	//	{
-	//		auto cheatMan = reinterpret_cast<UBioCheatManager*>(cheatManObj);
-	//		FName levelName;
-	//		CreateName(L"BIOA_MatScreenshot", 0, &levelName);
-	//		cheatMan->StreamLevelIn(levelName);
-	//	}
-	//}
 }
 
 
@@ -195,7 +144,7 @@ SPI_IMPLEMENT_ATTACH
 	auto _ = SDKInitializer::Instance();
 
 	// Cache the pointer so we can install a hook later (if needed)
-	SPIInterfacePtr = InterfacePtr;
+	SharedData::SPIInterfacePtr = InterfacePtr;
 
 	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
 	INIT_HOOK_PATTERN(ProcessEvent);
@@ -216,7 +165,7 @@ SPI_IMPLEMENT_ATTACH
 
 
 	hPipe = CreateNamedPipe(TEXT("\\\\.\\pipe\\LEX_LE1_COMM_PIPE"),
-		PIPE_ACCESS_DUPLEX,
+		PIPE_ACCESS_INBOUND,
 		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,   // FILE_FLAG_FIRST_PIPE_INSTANCE is not needed but forces CreateNamedPipe(..) to fail if the pipe already exists...
 		1,
 		1024 * 16,

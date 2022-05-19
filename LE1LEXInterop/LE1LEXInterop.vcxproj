@@ -101,6 +101,7 @@
     <ClInclude Include="LEXCommunications.h" />
     <ClInclude Include="LEXLE1Interop.h" />
     <ClInclude Include="SharedData.h" />
+    <ClInclude Include="StaticVariablePointers.h" />
     <ClInclude Include="UtilityMethods.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
