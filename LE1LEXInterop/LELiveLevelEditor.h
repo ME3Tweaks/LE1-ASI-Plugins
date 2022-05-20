@@ -1,7 +1,11 @@
 #pragma once
 
 // Typedefs
-typedef BOOL (*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove);
+#if defined(LE1) || defined(LE2)
+typedef BOOL(*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove);
+#elif LE3
+typedef BOOL(*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove, BOOL unknown);
+#endif
 
 class LELiveLevelEditor
 {
@@ -49,6 +53,24 @@ private:
 			if (Actors.Data[i]->IsA(actorClass))
 			{
 				auto actor = static_cast<AActor*>(Actors.Data[i]);
+
+				//if (actor->IsA(AStaticLightCollectionActor::StaticClass()))
+				//{
+				//	auto slca = static_cast<AStaticLightCollectionActor*>(actor);
+				//	for (int i = 0; i < slca->Components.Count; i++)
+				//	{
+				//		SetSLCAComponentPosition(slca, i, 0, 0, 0);
+				//	}
+				//}
+
+				//if (actor->IsA(AStaticMeshCollectionActor::StaticClass()))
+				//{
+				//	auto slca = static_cast<AStaticMeshCollectionActor*>(actor);
+				//	for (int i = 0; i < slca->Components.Count; i++)
+				//	{
+				//		SetSLCAComponentPosition(slca, i, 0, 0, 0);
+				//	}
+				//}
 
 				// String interps in C++ :/
 				std::wstringstream ss2; // This is not declared outside the loop cause otherwise it carries forward
@@ -102,38 +124,9 @@ private:
 		//}
 	}
 
-	static void AccessDumpedActorsList(USequenceOp* const op)
-	{
-		const auto numVarLinks = op->VariableLinks.Num();
-		int index = 0;
-		for (auto i = 0; i < numVarLinks; i++)
-		{
-			if (op->VariableLinks(i).LinkedVariables.Count == 0)
-			{
-				continue;
-			}
-			const auto seqVar = op->VariableLinks(i).LinkedVariables(0);
-			if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Index", 5) && IsA<USeqVar_Int>(seqVar))
-			{
-				const auto idxVar = static_cast<USeqVar_Int*>(seqVar);
-				index = idxVar->IntValue;
-			}
-			if (!_wcsnicmp(op->VariableLinks(i).LinkDesc.Data, L"Output Object", 15) && IsA<USeqVar_Object>(seqVar))
-			{
-				const auto outputVar = static_cast<USeqVar_Object*>(seqVar);
-				if (index >= 0 && index < Actors.Count)
-				{
-					outputVar->ObjValue = Actors(index);
-				}
-				else
-				{
-					outputVar->ObjValue = nullptr;
-				}
-			}
-		}
-	}
-
 	// Gets an actor with the specified full name from the specified map file in memory
+	// This should probably be invalidated or always found new
+	// Maybe enumerate the actors list...?
 	static void UpdateSelectedActor(char* mapName, char* actorName) {
 		//writeln(L"Selecting act for: %hs", actorName);
 		const auto objCount = UObject::GObjObjects()->Count;
@@ -192,7 +185,36 @@ private:
 			f.Z = z;
 
 			FarMoveActor(StaticVariables::GWorld(), SelectedActor, f, 0, 1, 0);
-			//SelectedActor->SetLocation(f);
+		}
+	}
+
+	static void SetSLCAComponentPosition(AStaticLightCollectionActor* smca, int componentIdx, float x, float y, float z)
+	{
+		if (smca)
+		{
+			auto compC = smca->Components.Data[componentIdx];
+			if (compC && compC->IsA(ULightComponent::StaticClass()))
+			{
+				// Todo: This (UI needs sub-component selector)
+				auto comp = static_cast<ULightComponent*>(compC);
+				comp->WorldToLight = FMatrix();
+				comp->LightToWorld = FMatrix();
+			}
+		}
+	}
+
+	static void SetSLCAComponentPosition(AStaticMeshCollectionActor* smca, int componentIdx, float x, float y, float z)
+	{
+		if (smca)
+		{
+			auto compC = smca->Components.Data[componentIdx];
+			if (compC && compC->IsA(UStaticMeshComponent::StaticClass()))
+			{
+				// Todo: This (UI needs sub-component selector)
+				auto comp = static_cast<UStaticMeshComponent*>(compC);
+				comp->CachedParentToWorld = FMatrix();
+				comp->LocalToWorld = FMatrix();
+			}
 		}
 	}
 
@@ -254,24 +276,21 @@ private:
 
 		// LE1 and LE2 have same byte signature
 #if defined(LE1) || defined(LE2)
-		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54	40 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00");
-		BYTE instructionChange0[] = { 0x26 }; // REL OFFSET
-		PatchMemory((void*)((int64)FarMoveActor + 40), instructionChange0, 1); // Change JNZ jump offset to point to location test code (post checks)
-
-		BYTE instructionChange[] = { 0xEB }; // JMP NEAR
-		PatchMemory((void*)((int64)FarMoveActor + 51), instructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
+		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00");
+#elif LE3
+		// LE3 method has an extra bool parameter
+		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 57 48 8d 6c 24 e1 48 81 ec b0 00 00 00");
 #endif
 
-#ifdef LE3
-		BYTE instructionChange0[] = { 0x26 }; // REL OFFSET
-		PatchMemory((void*)((int64)FarMoveActor + 40), instructionChange0, 1); // Change JNZ jump offset to point to location test code (post checks)
+		// Rel offset 
+		BYTE relOffsetChange[] = { 0x26 }; // REL OFFSET (Same in all 3 games)
+		PatchMemory((void*)((int64)FarMoveActor + 40), relOffsetChange, 1); // Change JNZ jump offset to point to location test code (post checks)
 
-		BYTE instructionChange[] = { 0xEB }; // JMP NEAR
-		PatchMemory((void*)((int64)FarMoveActor + 51), instructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
-#endif
-		//NopOutMemory((void*)((int64)FarMoveActor + 20), 59); //0x
+		// Not sure if this is actually required but here to ensure the other jump can't occur
+		BYTE jumpInstructionChange[] = { 0xEB }; // JMP NEAR
+		PatchMemory((void*)((int64)FarMoveActor + 51), jumpInstructionChange, 1); // Change JNE to JMP when testing bStatic/bMovable
+
 		initialized = true;
-
 		return true;
 	}
 
@@ -284,6 +303,9 @@ public:
 			return true; // We have nothing to handle here
 
 		// PostRender
+
+		// This isn't that efficient since we could skip this every time if
+		// we weren't drawing the line. But we have to be able to flush it out.
 		auto funcName = Function->GetName();
 		if (strcmp(funcName, "PostRender") == 0)
 		{
@@ -291,7 +313,10 @@ public:
 			if (hud != nullptr)
 			{
 				hud->FlushPersistentDebugLines(); // Clear it out
-				hud->DrawDebugLine(SharedData::cachedPlayerPosition, SelectedActor->Location, 255, 255, 255, TRUE);
+				if (DrawLineToSelected) {
+
+					hud->DrawDebugLine(SharedData::cachedPlayerPosition, SelectedActor->Location, 255, 255, 255, TRUE);
+				}
 			}
 		}
 		return true;
@@ -314,6 +339,18 @@ public:
 		if (startsWith("LLE_DUMP_ACTORS", command))
 		{
 			DumpActors();
+			return true;
+		}
+
+		if (startsWith("LLE_SHOW_TRACE", command))
+		{
+			DrawLineToSelected = true;
+			return true;
+		}
+
+		if (startsWith("LLE_HIDE_TRACE", command))
+		{
+			DrawLineToSelected = false;
 			return true;
 		}
 
