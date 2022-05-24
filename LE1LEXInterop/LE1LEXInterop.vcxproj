@@ -97,7 +97,7 @@
     <ClInclude Include="LE1AnimViewer.h" />
     <ClInclude Include="LE1GenericCommands.h" />
     <ClInclude Include="LELiveLevelEditor.h" />
-    <ClInclude Include="LE1PathfindingGPS.h" />
+    <ClInclude Include="LEPathfindingGPS.h" />
     <ClInclude Include="LEXCommunications.h" />
     <ClInclude Include="LEXLE1Interop.h" />
     <ClInclude Include="SharedData.h" />

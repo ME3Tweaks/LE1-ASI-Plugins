@@ -1,5 +1,5 @@
 #pragma once
-class LE1PathfindingGPS
+class LEPathfindingGPS
 {
 private:
 
@@ -30,7 +30,7 @@ public:
 	// Return false if other features shouldn't be able to also handle this function call
 	static bool ProcessEvent(UObject* Context, UFunction* Function, void* Parms, void* Result)
 	{
-		if (LE1PathfindingGPS::playerGPSActive && IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
+		if (LEPathfindingGPS::playerGPSActive && IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
 		{
 			const auto playerController = static_cast<ABioPlayerController*>(Context);
 			if (playerController) {
@@ -54,4 +54,4 @@ public:
 };
 
 // Static variable initialization
-bool LE1PathfindingGPS::playerGPSActive = false;
+bool LEPathfindingGPS::playerGPSActive = false;

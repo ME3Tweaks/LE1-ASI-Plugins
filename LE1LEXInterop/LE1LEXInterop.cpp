@@ -23,10 +23,12 @@
 #include "StaticVariablePointers.h"
 
 // Featureset
+#include <thread>
+
 #include "LEXCommunications.h"
 #include "LE1AnimViewer.h"
 #include "LE1GenericCommands.h"
-#include "LE1PathfindingGPS.h"
+#include "LEPathfindingGPS.h"
 #include "LELiveLevelEditor.h"
 
 #pragma comment(lib, "shlwapi.lib")
@@ -102,8 +104,9 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 	SharedData::ProcessEvent(Context, Function, Parms, Result); // Update the shared data automatically
 
 	bool continueChecking = LEXCommunications::ProcessEvent(Context, Function, Parms, Result);
-	if (continueChecking) continueChecking = LE1PathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
+	if (continueChecking) continueChecking = LEPathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
 	if (continueChecking) continueChecking = LELiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
+	if (continueChecking) continueChecking = LEAnimViewer::ProcessEvent(Context, Function, Parms, Result);
 
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
@@ -133,39 +136,18 @@ void ProcessCommand(char str[1024], DWORD dword)
 	writeln("Received command: %hs", str);
 
 	bool handled = LE1GenericCommands::HandleCommand(str);
-	if (!handled) handled = LE1PathfindingGPS::HandleCommand(str);
+	if (!handled) handled = LEPathfindingGPS::HandleCommand(str);
 	if (!handled) handled = LELiveLevelEditor::HandleCommand(str);
-	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
+	if (!handled) handled = LEAnimViewer::HandleCommand(str);
 	//if (!handled) handled = LE1AnimViewer::HandleCommand(str);
 }
 
 
-SPI_IMPLEMENT_ATTACH
+void HandlePipe()
 {
-	Common::OpenConsole();
-
-	auto _ = SDKInitializer::Instance();
-
-	// Cache the pointer so we can install a hook later (if needed)
-	SharedData::SPIInterfacePtr = InterfacePtr;
-
-	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
-	INIT_HOOK_PATTERN(ProcessEvent);
-
-	// LE1: Override TLK for user notification
-	INIT_FIND_PATTERN_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00");
-	INIT_HOOK_PATTERN(TLKLookup);
-
-	// Used to dynamically register a package
-	// This is hooked so we can capture the first parameter address
-	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
-	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
-
-
 	// Setup the LEX <-> LE1 pipe
 	char buffer[1024];
 	DWORD dwRead;
-
 
 	hPipe = CreateNamedPipe(TEXT("\\\\.\\pipe\\LEX_LE1_COMM_PIPE"),
 		PIPE_ACCESS_INBOUND,
@@ -196,7 +178,36 @@ SPI_IMPLEMENT_ATTACH
 		//writeln("FLUSHING THE PIPES AWAY");
 		DisconnectNamedPipe(hPipe);
 	}
+}
 
+SPI_IMPLEMENT_ATTACH
+{
+	Common::OpenConsole();
+
+	auto _ = SDKInitializer::Instance();
+
+	// Cache the pointer so we can install a hook later (if needed)
+	SharedData::SPIInterfacePtr = InterfacePtr;
+
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	INIT_HOOK_PATTERN(ProcessEvent);
+
+	// LE1: Override TLK for user notification
+	INIT_FIND_PATTERN_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00");
+	INIT_HOOK_PATTERN(TLKLookup);
+
+	// Used to dynamically register a package
+	// This is hooked so we can capture the first parameter address
+	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
+	INIT_FIND_PATTERN_POSTHOOK(CacheContent, /*"48 8b c4 44 89"*/ "48 20 44 89 40 18 55 56 57 41 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec a0 00 00 00");
+	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
+
+	// I'm not sure how this handles the scope
+	writeln("Making pipe thread");
+	std::thread pipeThread(HandlePipe);
+	writeln("Detaching pipe thread");
+	pipeThread.detach();
+	writeln("Initialized LE1LEXInterop");
 	return true;
 }
 

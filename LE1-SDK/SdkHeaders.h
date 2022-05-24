@@ -179,11 +179,11 @@ struct FName
 				if (!strcmp(lookup, nameEntry->AnsiName))
 				{
 					FName name{};
-						name.Offset = (DWORD)((unsigned long long)nameEntry - (unsigned long long)namePool);
-						name.Chunk = (DWORD)((unsigned long long)namePool - (unsigned long long)gBioNamePools);
-						name.Number = instance;
-						*outName = name;
-						return true;
+					name.Offset = (DWORD)((unsigned long long)nameEntry - (unsigned long long)namePool);
+					name.Chunk = (DWORD)((unsigned long long)namePool - (unsigned long long)gBioNamePools);
+					name.Number = instance;
+					*outName = name;
+					return true;
 				}
 			}
 		}
@@ -219,7 +219,7 @@ struct FString : public TArray<wchar_t> {
 			this->Data = Other;
 	};
 
-	~FString() {};
+	~FString() { };
 
 	FString operator = (wchar_t* Other)
 	{
@@ -237,7 +237,7 @@ struct FString : public TArray<wchar_t> {
 
 struct FScriptDelegate
 {
-	class UObject*		Object;
+	class UObject* Object;
 	struct FName		FunctionName;
 };
 

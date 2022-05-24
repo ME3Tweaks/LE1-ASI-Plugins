@@ -320,7 +320,6 @@ typedef void* (*tSelfPointerFunc)(void* ptr);
 tSelfPointerFunc InputPoll = (tSelfPointerFunc)0x7ff7129ca4f0;
 tSelfPointerFunc InputPoll_orig = nullptr;
 
-
 void* InputPoll_hook(void* ptr)
 {
 	writeln(L"InputPoll: %p", ptr);
@@ -358,7 +357,7 @@ SPI_IMPLEMENT_ATTACH
 	// and the game dies
 	// So it's not this method, but that's where the access is done
 	//INIT_FIND_PATTERN_POSTHOOK(LoadPackage, /*"48 8b c4 44 89*/"40 18 48 89 48 08 53 56 57 41 56 41 57 48 83 ec 50 48 c7 40 b8 fe ff ff ff");
-	INIT_HOOK_PATTERN(InputPoll);
+	//INIT_HOOK_PATTERN(InputPoll);
 
 
 	// -------------------------------------------------------
@@ -391,8 +390,8 @@ SPI_IMPLEMENT_ATTACH
 		// For trying to figure out why merges aren't working to the CC 2DAs
 		//INIT_FIND_PATTERN_POSTHOOK(LoadSlider2DA, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 b8 fc ff ff 48 81 ec 20 04 00 00 48 c7 85 f8 01 00 00 fe ff ff ff")
 		//INIT_HOOK_PATTERN(LoadSlider2DA);
-		
-		//hookLoggingFunctions(InterfacePtr);
+
+		hookLoggingFunctions(InterfacePtr);
 
 		//INIT_FIND_PATTERN_POSTHOOK(EventNotifierAddNotice, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8b ec 48 83 ec 60 48 c7 45 c0 fe ff ff ff 48 89 58 10 48 89 70 18 48 89 78 20 4c 8b f1 33 db 48 89 5d c8 48 89 5d d0 48 89 5d d8 48 89 5d e0 48 89 5d e8 48 89 5d f0");
 		//INIT_HOOK_PATTERN(EventNotifierAddNotice);

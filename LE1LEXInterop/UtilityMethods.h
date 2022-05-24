@@ -145,12 +145,14 @@ float ToRadians(const int unrealRotationUnits)
 }
 
 // Game utility methods
-typedef void (*tCachePackage)(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists);
-tCachePackage CacheContentWrapper = nullptr;
+typedef BOOL (*tCachePackage)(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists);
+tCachePackage CacheContent = nullptr;
+
+tCachePackage CacheContentWrapper = nullptr; // capture pointer
 tCachePackage CacheContentWrapper_orig = nullptr;
 void* CacheContentWrapperClassPointer = nullptr; // Pointer we will use when we call the orig method on our own
-void CacheContentWrapper_hook(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists)
+BOOL CacheContentWrapper_hook(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists)
 {
 	CacheContentWrapperClassPointer = parm1;
-	CacheContentWrapper_orig(parm1, filePath, replaceIfExisting, warnIfExists);
+	return CacheContentWrapper_orig(parm1, filePath, replaceIfExisting, warnIfExists);
 }

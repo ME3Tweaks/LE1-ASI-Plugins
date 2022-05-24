@@ -161,10 +161,10 @@ const std::string string_format(const char* const zcFormat, ...) {
 /// <returns></returns>
 std::string ws2s(const std::wstring& wstr)
 {
-    using convert_typeX = std::codecvt_utf8<wchar_t>;
-    std::wstring_convert<convert_typeX, wchar_t> converterX;
+	using convert_typeX = std::codecvt_utf8<wchar_t>;
+	std::wstring_convert<convert_typeX, wchar_t> converterX;
 
-    return converterX.to_bytes(wstr);
+	return converterX.to_bytes(wstr);
 }
 
 /// <summary>
@@ -174,10 +174,20 @@ std::string ws2s(const std::wstring& wstr)
 /// <returns></returns>
 std::wstring s2ws(const std::string& str)
 {
-    using convert_typeX = std::codecvt_utf8<wchar_t>;
-    std::wstring_convert<convert_typeX, wchar_t> converterX;
+	using convert_typeX = std::codecvt_utf8<wchar_t>;
+	std::wstring_convert<convert_typeX, wchar_t> converterX;
 
-    return converterX.from_bytes(str);
+	return converterX.from_bytes(str);
+}
+
+// WARNING: YOU MUST DEALLOCATE THIS MEMORY AFTER USE!
+const wchar_t* CharToWideMUSTDEALLOCATEAFTERUSE(const char* c)
+{
+	const size_t cSize = strlen(c) + 1;
+	wchar_t* wc = new wchar_t[cSize];
+	mbstowcs(wc, c, cSize);
+
+	return wc;
 }
 
 /// <summary>
@@ -212,23 +222,26 @@ public:
 	/// </summary>
 	/// <param name="str"></param>
 	/// <param name="bTimeStamp"></param>
-	void writeToLog(string str, bool bTimeStamp, bool newLine = false) {
+	void writeToLog(string str, bool bTimeStamp, bool newLine = false, bool outputToConsole = true) {
 		if (bTimeStamp) {
 			string timeStamp = getTimestampStr();
 			fprintf(log, timeStamp.c_str());
-			writeMsg(L"%hs", timeStamp.c_str());
+			if (outputToConsole)
+				writeMsg(L"%hs", timeStamp.c_str());
 			//free((char*)timeStamp);
 		}
 		/*if (!log) {
 			std::cout << "LOG ISNT INITALIZED";
 		}*/
 		fprintf(log, "%s", str.data());
-		writeMsg(L"%hs", str.data());
+		if (outputToConsole)
+			writeMsg(L"%hs", str.data());
 
 		if (newLine)
 		{
 			fprintf(log, "\n");
-			writeMsg(L"\n");
+			if (outputToConsole)
+				writeMsg(L"\n");
 		}
 
 		numLinesWritten++;
@@ -238,15 +251,17 @@ public:
 		}
 	}
 
-	void writeWideToLog(std::wstring_view wstr) {
+	void writeWideToLog(std::wstring_view wstr, bool outputToConsole = true) {
 		fwprintf(log, L"%s", wstr.data());
-		writeln(L"%s", wstr.data());
+		if (outputToConsole)
+			writeln(L"%s", wstr.data());
 		fflush(log);
 	}
 
-	void writeWideLineToLog(std::wstring_view wstr) {
+	void writeWideLineToLog(std::wstring_view wstr, bool outputToConsole = true) {
 		fwprintf(log, L"%s\n", wstr.data());
-		writeln(L"%s", wstr.data());
+		if (outputToConsole)
+			writeln(L"%s", wstr.data());
 		fflush(log);
 	}
 

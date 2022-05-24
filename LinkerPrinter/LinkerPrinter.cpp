@@ -89,7 +89,7 @@ void PrintLinkers()
 			swprintf(buffer, 1024, L"%hs -> %s\n", key.c_str(), val.c_str());
 		}
 
-		logger.writeWideToLog(buffer);
+		logger.writeWideToLog(buffer, false);
 		numDone++;
 	}
 
@@ -141,6 +141,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 
 SPI_IMPLEMENT_ATTACH
 {
+	writeln("Initializing LE1LinkerPrinter...");
 	Common::OpenConsole();
 
 	auto _ = SDKInitializer::Instance();

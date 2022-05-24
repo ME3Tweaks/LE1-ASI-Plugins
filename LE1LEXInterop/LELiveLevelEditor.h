@@ -326,6 +326,10 @@ public:
 	// Return false if not handled.
 	static bool HandleCommand(char* command)
 	{
+		// All LLE commands start with LLE_
+		if (!startsWith("LLE_", command))
+			return false;
+
 		if (startsWith("LLE_TEST_ACTIVE", command))
 		{
 			if (!initialized)
