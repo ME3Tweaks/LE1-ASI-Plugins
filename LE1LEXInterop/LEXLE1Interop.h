@@ -16,6 +16,12 @@ bool startsWith(const char* pre, const char* str)
 	return lenstr < lenpre ? false : memcmp(pre, str, lenpre) == 0;
 }
 
+// Checks if a string starts with another
+bool stringStartsWith(const char* prefix, std::string fullstring)
+{
+	return fullstring.rfind(prefix, 0) == 0;
+}
+
 // Returns a NEW MEMORY slice of the specified character string 
 char* substr(char* arr, int begin, int len)
 {

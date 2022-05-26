@@ -5,6 +5,14 @@ typedef bool (*tIsWindowFocused)();
 class LEAnimViewer
 {
 private:
+
+#ifdef LE1
+	// Memory pre-allocated for use with passing to kismet, since FString doesn't copy it
+	static wchar_t ActorFullMemoryPath[1024];
+	static std::wstring ActorMemoryPath;
+	static std::wstring ActorPackageFile;
+#endif
+
 	// BioWorldInfo internal native
 	static tIsWindowFocused IsWindowFocused;
 	static tIsWindowFocused IsWindowFocused_orig;
@@ -40,37 +48,47 @@ public:
 
 	// Return true if handled.
 	// Return false if not handled.
-	static bool HandleCommand(char* command)
+	static bool HandleCommand(std::string command)
 	{
 		// All AnimViwere commands start with ANIMV_
-		if (!startsWith("ANIMV_", command))
+		if (!stringStartsWith("ANIMV_", command))
 			return false;
 
-		if (startsWith("ANIMV_ALLOW_WINDOW_PAUSE", command))
+		if (stringStartsWith("ANIMV_ALLOW_WINDOW_PAUSE", command))
 		{
 			AllowWindowPausing(true);
 			return true;
 		}
-		else if (startsWith("ANIMV_DISALLOW_WINDOW_PAUSE", command))
+		else if (stringStartsWith("ANIMV_DISALLOW_WINDOW_PAUSE", command))
 		{
 			AllowWindowPausing(false);
 			return true;
 		}
 
 #ifdef LE1
-		else if (startsWith("CHANGEPAWN ", command))
+		else if (stringStartsWith("ANIMV_CHANGE_PAWN ", command))
 		{
 			// Test code.
-			auto subCommand = command + 11;
+			auto subCommand = GetCommandParam(command);
+			auto actorFullPath = s2ws(GetCommandParam(command));
 
-			auto spGame = static_cast<ABioSPGame*>(FindObjectOfType(ABioSPGame::StaticClass()));
-			FVector v = FVector();
-			v.X = -4300;
-			v.Y = -6280;
-			v.Z = -26560;
-			FRotator r = FRotator();
-			// This doesn't work. IDK why
-			auto pawn = spGame->SpawnPawn(L"BIOA_JUG80_00_DSG.BIOG_Pilot_Hench_C.hench_pilot", v, r, false);
+			// Copy the string to the buffer
+			wcscpy(LEAnimViewer::ActorFullMemoryPath, actorFullPath.c_str());
+
+			// CauseEvent: ChangeActor
+			//auto player = reinterpret_cast<ABioPlayerController*>(FindObjectOfType(ABioPlayerController::StaticClass()));
+			//if (player)
+			//{
+			//	FName foundName;
+			//	StaticVariables::CreateName(L"ChangeActor", 0, & foundName);
+			//	player->CauseEvent(foundName);
+			//}
+			//return true;
+
+			//ActorPackageFile = s2ws(GetCommandParam(command));
+			//ActorMemoryPath = s2ws(GetCommandParam(command));
+
+
 
 			return true;
 
@@ -84,6 +102,40 @@ public:
 	// Return false if other features shouldn't be able to also handle this function call
 	static bool ProcessEvent(UObject* Context, UFunction* Function, void* Parms, void* Result)
 	{
+		if (!strcmp(Context->Class->GetName(), "LEXSeqAct_SpawnPawn") && !strcmp(Function->GetName(), "Activated"))
+		{
+			// Make sure the variables are set
+			//SetSequenceString(static_cast<USequenceOp*>(Context), L"Type", LEAnimViewer::ActorFullMemoryPath);
+
+			auto spGame = static_cast<ABioSPGame*>(FindObjectOfType(ABioSPGame::StaticClass()));
+			spGame->ServerOptions = FString(ActorFullMemoryPath);
+			auto t = "";
+			//FVector v = FVector();
+			//v.X = -4013;
+			//v.Y = -6046;
+			//v.Z = -26559;
+			//FRotator r = FRotator();
+
+			//auto pf = FString(ActorPackageFile.data());
+			//spGame->PreloadPackage(pf); // Load into memory
+
+			//// How do we know when this is done...?
+			////std::this_thread::sleep_for(std::chrono::seconds(1));
+
+			//auto mp = FString(ActorMemoryPath.data());
+			//auto pawn = spGame->SpawnPawn(mp, v, r, false);
+			//FName tag;
+			//StaticVariables::CreateName(L"AnimatedActor", 0, &tag);
+			//pawn->Tag = tag;
+		}
+
+		//if (!strcmp(Context->Class->GetName(), "LEXSeqAct_SpawnPawn") && !strcmp(Function->GetName(), "HookedSpawn"))
+		//{
+		//	// Make sure the variables are set
+		//	SetSequenceString(static_cast<USequenceOp*>(Context), L"Type", LEAnimViewer::ActorFullMemoryPath);
+		//}
+
+		// Still process it
 		return true;
 	}
 
@@ -100,3 +152,10 @@ private:
 bool LEAnimViewer::initialized = false;
 tIsWindowFocused LEAnimViewer::IsWindowFocused = nullptr;
 tIsWindowFocused LEAnimViewer::IsWindowFocused_orig = nullptr;
+
+#ifdef LE1
+wchar_t LEAnimViewer::ActorFullMemoryPath[1024];
+std::wstring LEAnimViewer::ActorMemoryPath = L"BIOA_NOR_C.HMM.hench_pilot";
+std::wstring LEAnimViewer::ActorPackageFile = L"BIOA_NOR10_01_DS1";
+
+#endif

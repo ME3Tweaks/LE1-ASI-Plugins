@@ -23,13 +23,14 @@ public:
 		{
 			auto eventName = substr(command, 11, strlen(command) - 11);
 			//printf(eventName);
-			auto bioWorldInfo = reinterpret_cast<ABioWorldInfo*>(FindObjectOfType(ABioWorldInfo::StaticClass()));
-			if (bioWorldInfo)
+			auto player = reinterpret_cast<ABioPlayerController*>(FindObjectOfType(ABioPlayerController::StaticClass()));
+			if (player)
 			{
 				FName foundName;
 				StaticVariables::CreateName(s2ws(eventName).c_str(), 0, &foundName);
-				bioWorldInfo->eventCauseEvent(foundName);
+				player->CauseEvent(foundName);
 			}
+
 			return true;
 		}
 

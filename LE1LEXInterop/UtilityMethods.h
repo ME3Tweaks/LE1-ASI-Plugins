@@ -9,8 +9,8 @@ bool NopOutMemory(void* startPos, int patchSize)
 		return false;
 
 	// Nop it out
-	writeln(L"Nopping memory: %p for %i bytes" , startPos, patchSize);
-	for(int i = 0; i < patchSize; i++)
+	writeln(L"Nopping memory: %p for %i bytes", startPos, patchSize);
+	for (int i = 0; i < patchSize; i++)
 	{
 		*(char*)((int64)startPos + i) = 0x90; // This line only has 3 underlines in visual studio
 	}
@@ -69,6 +69,20 @@ char* GetContainingMapName(UObject* object)
 	return "(null)";
 }
 
+// Gets the string up to the end of the next space. The input parameter will be modified.
+std::string GetCommandParam(std::string& commandStr)
+{
+	auto spacePos = commandStr.find(' ', 0);
+	if (spacePos == string::npos)
+	{
+		return commandStr; // Return the rest of the string
+	}
+
+	auto param = commandStr.substr(0, spacePos);
+	commandStr = commandStr.substr(spacePos + 1, commandStr.length() - 1 - spacePos);
+	return param;
+}
+
 inline std::wostream& operator<< (std::wostream& out, FString const& fString)
 {
 	out.write(fString.Data, fString.Count);
@@ -88,6 +102,27 @@ void SendStringToLEX(const wstring& wstr) {
 		cds.cbData = (wstr.length() + 1) * sizeof(wchar_t);
 		cds.lpData = PVOID(wstr.c_str());
 		SendMessageTimeout(handle, WM_COPYDATA, NULL, reinterpret_cast<LPARAM>(&cds), 0, 10, nullptr);
+	}
+}
+
+void SetSequenceString(USequenceOp* op, wchar_t* linkName, wchar_t* value)
+{
+	const auto numVarLinks = op->VariableLinks.Num();
+	for (auto i = 0; i < numVarLinks; i++)
+	{
+		const auto& varLink = op->VariableLinks(i);
+		for (auto j = 0; j < varLink.LinkedVariables.Count; ++j)
+		{
+			const auto seqVar = varLink.LinkedVariables(j);
+			if (!_wcsnicmp(varLink.LinkDesc.Data, linkName, 256) && IsA<USeqVar_String>(seqVar))
+			{
+				USeqVar_String* strVar = reinterpret_cast<USeqVar_String*>(seqVar);
+				auto strVal = strVar->StrValue;
+				strVal.Data = value;
+				strVal.Count = wcslen(value);
+				strVar->StrValue = strVal; // Value is updated but kismet behavior doesn't change
+			}
+		}
 	}
 }
 
@@ -145,7 +180,7 @@ float ToRadians(const int unrealRotationUnits)
 }
 
 // Game utility methods
-typedef BOOL (*tCachePackage)(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists);
+typedef BOOL(*tCachePackage)(void* parm1, wchar_t* filePath, bool replaceIfExisting, bool warnIfExists);
 tCachePackage CacheContent = nullptr;
 
 tCachePackage CacheContentWrapper = nullptr; // capture pointer
