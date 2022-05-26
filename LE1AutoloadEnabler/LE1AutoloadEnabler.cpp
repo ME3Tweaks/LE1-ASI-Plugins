@@ -311,7 +311,6 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 
 SPI_IMPLEMENT_ATTACH
 {
-	SetWorkingDirectory();
 	initLog();
 
 	// Find RegisterTFC so we can register TFCs
