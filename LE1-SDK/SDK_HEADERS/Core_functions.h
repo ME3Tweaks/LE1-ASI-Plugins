@@ -50,11 +50,11 @@ char* UObject::GetInstancedName()
 
 	if (this->Name.Number > 0)
 	{
-		sprintf_s(cOutBuffer, "%s_%d", this->Name.GetName(), this->Name.Number - 1);
+		sprintf_s(cOutBuffer, 256, "%s_%d", this->Name.GetName(), this->Name.Number - 1);
 	}
 	else
 	{
-		sprintf_s(cOutBuffer, "%s", this->Name.GetName());
+		sprintf_s(cOutBuffer, 256, "%s", this->Name.GetName());
 	}
 
 	return cOutBuffer;
