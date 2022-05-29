@@ -112,6 +112,11 @@ void PrintSequenceVariable(USequenceVariable* seqVar)
 	{
 		ss << (static_cast<USeqVar_Bool*>(seqVar)->bValue ? "True" : "False") << " ";
 	}
+	else if (seqVar->IsA(USeqVar_Vector::StaticClass()))
+	{
+		auto vector = static_cast<USeqVar_Vector*>(seqVar);
+		ss << "Vector X=" << vector->VectValue.X << " Y=" << vector->VectValue.Y  << " Z=" << vector->VectValue.Z << " ";
+	}
 	else if (seqVar->IsA(USeqVar_Object::StaticClass()))
 	{
 		auto seqVarObj = static_cast<USeqVar_Object*>(seqVar);
