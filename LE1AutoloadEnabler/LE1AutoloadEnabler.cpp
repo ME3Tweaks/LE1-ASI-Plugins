@@ -141,7 +141,7 @@ void RegisterStartupFile(UPackage* package)
 		auto obj = GObjects->Data[i];
 		if (obj && obj->Outer)
 		{
-			// Must not be null and must have an outer (otherwise it's already an object at the root of the heirarchy, which should already be rooted... in theory...)
+			// Must not be null and must have an outer (otherwise it's already an object at the root of the hierarchy, which should already be rooted... in theory...)
 			UObject* outerMost = obj;
 			while (outerMost->Outer != nullptr)
 			{
@@ -151,7 +151,7 @@ void RegisterStartupFile(UPackage* package)
 			if (outerMost == package)
 			{
 				// It's a child of this package!
-				//writeln(L"Rooting startup package object %hs in package %hs", obj->GetFullName(), package->Name.GetName())
+				writeln(L"Rooting startup package object %hs in package %hs", obj->GetFullName(), package->Name.GetName())
 				RootObject(obj);
 			}
 		}
