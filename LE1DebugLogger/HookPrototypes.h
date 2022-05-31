@@ -206,7 +206,7 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 {
 	// NEEDS UPDATED FOR LE1
 	// 0x7ff74a9df82d DRM free | MOV RCX, qword ptr [GFileManager]
-	auto addr = findAddressLeaMov(InterfacePtr, "GFileManager", "48 8b 0d 9c dd 67 01 ff d3 90 4c 89 6c 24 60 48 8b 4c 24 58");
+	/*auto addr = findAddressLeaMov(InterfacePtr, "GFileManager", "48 8b 0d 9c dd 67 01 ff d3 90 4c 89 6c 24 60 48 8b 4c 24 58");
 	if (addr != nullptr)
 	{
 		GFileManager = static_cast<FFileManager*>(addr);
@@ -215,10 +215,10 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	else
 	{
 		writeln(" >> FAILED TO FIND GFileManager!");
-	}
+	}*/
 
 	// 0x7ff71216d5ef DRM free | MOV RAX, qword ptr [GPackageFileCache]
-	addr = findAddressLeaMov(InterfacePtr, "GPackageFileCache", "48 8b 05 ca 8c 5e 01 48 8b 08 4c 8b 71 10 83 7b 08 ff 75 46");
+	/*addr = findAddressLeaMov(InterfacePtr, "GPackageFileCache", "48 8b 05 ca 8c 5e 01 48 8b 08 4c 8b 71 10 83 7b 08 ff 75 46");
 	if (addr != nullptr)
 	{
 		GPackageFileCache = static_cast<FPackageFileCache*>(addr);
@@ -227,10 +227,10 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	else
 	{
 		writeln(" >> FAILED TO FIND GPackageFileCache!");
-	}
+	}*/
 
 	// 0x7ff7123b52fe DRM free | LEA R9, [GNatives]
-	addr = findAddressLeaMov(InterfacePtr, "GNatives", "4c 8d 0d bb 80 39 01 48 8b f9 48 8b da 48 8b 4a 1c 44 0f b6 00");
+	auto addr = findAddressLeaMov(InterfacePtr, "GNatives", "4c 8d 0d bb 80 39 01 48 8b f9 48 8b da 48 8b 4a 1c 44 0f b6 00");
 	if (addr != nullptr)
 	{
 		GNatives = static_cast<tNativeFunction*>(addr);
@@ -242,7 +242,7 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	}
 
 	// 0x7ff71243aea1 DRM free | MOV R15, [GSys]
-	addr = findAddressLeaMov(InterfacePtr, "GSys", "4c 8b 3d b8 b8 2e 01 41 8b dd 0f 1f 44 00 00");
+	/*addr = findAddressLeaMov(InterfacePtr, "GSys", "4c 8b 3d b8 b8 2e 01 41 8b dd 0f 1f 44 00 00");
 	if (addr != nullptr)
 	{
 		GSys = static_cast<BioSystem*>(addr);
@@ -251,10 +251,10 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	else
 	{
 		writeln(" >> FAILED TO FIND GSys!");
-	}
+	}*/
 
 	// 0x7ff712380fd6 DRM free | MOV RCX, qword ptr [GWorld]
-	addr = findAddressLeaMov(InterfacePtr, "GWorld", "48 8b 0d 6b 2b 47 01 e8 2e 63 30 00 0f 28 f8 48 8b 0d 5c 2b 47 01");
+	/*addr = findAddressLeaMov(InterfacePtr, "GWorld", "48 8b 0d 6b 2b 47 01 e8 2e 63 30 00 0f 28 f8 48 8b 0d 5c 2b 47 01");
 	if (addr != nullptr)
 	{
 		GWorld = static_cast<UWorld*>(addr);
@@ -263,7 +263,7 @@ void LoadCommonClassPointers(ISharedProxyInterface* InterfacePtr)
 	else
 	{
 		writeln(" >> FAILED TO FIND GWorld!");
-	}
+	}*/
 }
 
 // Converts a load flags bitmask to it's string representation

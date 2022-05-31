@@ -5,9 +5,10 @@
 
 #define MYHOOK "DebugLogger_"
 
-
 //typedef bool (*tFPackageFileCacheFindPackageFile) (wchar_t* packageName, FGuid* guid, FString& OutFileName, wchar_t* language, bool unknown);
 
+
+#ifndef NDEBUG
 
 // USystem implementation
 struct BioSystem
@@ -28,9 +29,8 @@ struct BioSystem
 	TArray<FString> ScriptPaths; //?
 };
 
-#define GSysAddress 0x7ff713726760;
 BioSystem GSys; // Have to assign a bit after game startup
-
+#endif
 
 //struct FPackageFileCache;
 //bool hookLoggingFunctions(ISharedProxyInterface* interface_ptr);
