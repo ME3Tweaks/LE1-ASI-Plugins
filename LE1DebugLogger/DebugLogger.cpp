@@ -12,14 +12,6 @@ SPI_PLUGINSIDE_SEQATTACH;
 
 ME3TweaksASILogger logger("DebugLogger v4", "LE1DebugLogger.log");
 
-// Logs a message from a source
-void logMessage(const wchar_t* logSource, wchar_t* formatStr, void* param1, void* param2)
-{
-	// We have to prepare the formatting string since it's an inbound parameter
-	auto preString = wstring_format(L"%s: %s", logSource, formatStr);
-	logger.writeToLog(wstring_format(preString.data(), param1, param2), true, true);
-}
-
 // Not in the header because this is not part of the game we are hooking.
 typedef void (WINAPI* tOutputDebugStringW)(LPCWSTR lpcszString);
 tOutputDebugStringW OutputDebugStringW_orig = nullptr;
@@ -78,7 +70,7 @@ void LogInternal_hook(UObject* callingObject, LE1FFrame* stackFrame)
 	GNatives[nativeIndex](sfObject, (LE1FFrame*)stackFrame, &stringArg);
 
 	// Kinda jank way to re-use this code by making it create a string a certain way
-	logMessage(L"LogInternal() from %hs", L"%s", callingObject->GetFullName(), stringArg.Data);
+	logMessage(L"LogInternal() from %hs", L"%hs", callingObject->GetFullName(), stringArg.Data);
 
 	//restore the code pointer so LogInternal executes normally.
 	stackFrame->Code = originalCodePointer;
