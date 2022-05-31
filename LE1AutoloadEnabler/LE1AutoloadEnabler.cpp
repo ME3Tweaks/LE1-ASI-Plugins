@@ -302,6 +302,11 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 			i--;
 		}
 
+		if (i == 0 && !ContentScanComplete)
+		{
+			writeln(L"Content scan took too long, giving up waiting");
+		}
+
 		writeln(L"Performing TFC registration");
 		for each (auto tfcPath in DLCTFCsToRegister)
 		{
