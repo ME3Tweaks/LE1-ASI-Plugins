@@ -89,13 +89,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="fpng\fpng.cpp" />
     <ClCompile Include="LE1PNGScreenShots.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="..\Common.h" />
-    <ClInclude Include="..\Interface.h" />
-    <ClInclude Include="fpng\fpng.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LE1-SDK\LE1-SDK.vcxproj">
