@@ -19,7 +19,7 @@ constexpr bool GIsRelease = false;
 constexpr bool GIsRelease = true;
 #endif
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.6.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.7.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_SEQATTACH;
 
@@ -34,9 +34,9 @@ std::wstring GetDLCsRoot()
 	wchar_t modulePath[512];
 
 	GetModuleFileNameW(nullptr, modulePath, 512);
-	PathRemoveFileSpecW(modulePath);
-	PathRemoveFileSpecW(modulePath);
-	PathRemoveFileSpecW(modulePath);
+	PathRemoveFileSpecW(modulePath); // Remove ASI
+	PathRemoveFileSpecW(modulePath); // Remove Win64
+	PathRemoveFileSpecW(modulePath); // Remove Binaries
 
 	std::wstring root;
 	root.append(modulePath);
@@ -52,17 +52,18 @@ std::vector<std::wstring> GetAllDLCAutoloads(std::wstring&& searchRoot)
 
 	WIN32_FIND_DATA fd;
 	HANDLE handle = FindFirstFileW(searchRoot.c_str(), &fd);
-	do
-	{
-		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
-			&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
+	if (handle != INVALID_HANDLE_VALUE) {
+		do
 		{
-			wchar_t autoloadPath[512];
-			swprintf_s(autoloadPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
-			autoloadPaths.emplace_back(autoloadPath);
-		}
-	} while (FindNextFile(handle, &fd) != 0);
-
+			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
+				&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
+			{
+				wchar_t autoloadPath[512];
+				swprintf_s(autoloadPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
+				autoloadPaths.emplace_back(autoloadPath);
+			}
+		} while (FindNextFile(handle, &fd) != 0);
+	}
 	return autoloadPaths;
 }
 
@@ -85,7 +86,7 @@ void RegisterTFCWrapper(FString* tfcPath)
 	writeln(L"Registering DLC mod TFC file: %s", tfcPath->Data);
 	RegisterTFC(tfcPath);
 	// This just crashes it idk why
-	//free(tfcPath->Data); // Data consturcted here was made with _wcsdup
+	//free(tfcPath->Data); // Data constructed here was made with _wcsdup
 }
 
 // ======================================================================
@@ -318,65 +319,66 @@ SPI_IMPLEMENT_ATTACH
 {
 	initLog();
 
-	// Find RegisterTFC so we can register TFCs
-	INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
+// Find RegisterTFC so we can register TFCs
+INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
 
-	// Leftover for documentation sake.
-	// We need to find 'Has at least one TFC' which I think means TFC manager has loaded...
-	//INIT_FIND_PATTERN_POSTHOOK(HasAtLeastOneBasegameTFC, /* 8b 0d aa a6 50 */ "01 33 c0 2b 0d ce a6 50 01 85 c9 0f 9f c0 c3"); // dunno if this is long enough
+// Leftover for documentation sake.
+// We need to find 'Has at least one TFC' which I think means TFC manager has loaded...
+//INIT_FIND_PATTERN_POSTHOOK(HasAtLeastOneBasegameTFC, /* 8b 0d aa a6 50 */ "01 33 c0 2b 0d ce a6 50 01 85 c9 0f 9f c0 c3"); // dunno if this is long enough
 
-	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
-	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
+INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
+INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
 
-	// This method is called initially when Core.pcc loads
-	INIT_FIND_PATTERN_POSTHOOK(SomethingFirstLoad, /*48 8b c4 56 57*/ "41 54 41 56 41 57 48 83 ec 50 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 4d 8b f0 48 8b f2");
-	INIT_HOOK_PATTERN(SomethingFirstLoad);
+// This method is called initially when Core.pcc loads
+INIT_FIND_PATTERN_POSTHOOK(SomethingFirstLoad, /*48 8b c4 56 57*/ "41 54 41 56 41 57 48 83 ec 50 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 4d 8b f0 48 8b f2");
+INIT_HOOK_PATTERN(SomethingFirstLoad);
 
-	// Initialize the SDK because we need object names.
-	INIT_CHECK_SDK();
+// Initialize the SDK because we need object names.
+INIT_CHECK_SDK();
 
-	// This is done first cause it's kind of important that it's done early so changes to things like
-	// BIOC_Materials work
+// This is done first cause it's kind of important that it's done early so changes to things like
+// BIOC_Materials work
 
-	// Get a list of DLC Autoloads.
-	writeln(L"Finding DLC content...");
-	for (const auto& autoload : GetAllDLCAutoloads(GetDLCsRoot()))
+// Get a list of DLC Autoloads.
+writeln(L"Finding DLC content in %s...", GetDLCsRoot().c_str());
+
+for (const auto& autoload : GetAllDLCAutoloads(GetDLCsRoot())) // This has weird error 
+{
+	writeln(L"Found DLC Autoload.ini: %s", autoload.c_str());
+	GExtraAutoloadPaths.emplace_back(autoload.c_str());
+
+	// It's a DLC mod, LE only has a single autoload.ini (Bring Down The Sky)
+	std::filesystem::path path = autoload.c_str();
+	auto dlcFolder = path.parent_path();
+
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(dlcFolder))
 	{
-		writeln(L"Found DLC Autoload.ini: %s", autoload.c_str());
-		GExtraAutoloadPaths.push_back(autoload.c_str());
-
-		// It's a DLC mod, LE only has a single autoload.ini (Bring Down The Sky)
-		std::filesystem::path path = autoload.c_str();
-		auto dlcFolder = path.parent_path();
-
-		for (const auto& entry : std::filesystem::recursive_directory_iterator(dlcFolder))
+		if (entry.is_directory())
 		{
-			if (entry.is_directory())
-			{
-				writeln(L"\tScanning %s", entry.path().c_str());
-				continue;
-			}
+			writeln(L"\tScanning %s", entry.path().c_str());
+			continue;
+		}
 
-			// _wcsdup might leak memory but not much. Freeing it upon consumption crashes the app so...
-			auto extension = entry.path().extension();
-			if (extension == L".tfc") {
-				auto path = entry.path().c_str();
-				writeln(L"\t\tFound TFC: %s", path);
-				DLCTFCsToRegister.push_back(new FString(_wcsdup(path))); // We have to wait until first registration attempt or we'll hit a null pointer
-			}
-			else if (extension == ".isb")
-			{
-				// Register ISB
-				auto path = entry.path().c_str();
-				writeln(L"\t\tFound ISB: %s", path);
-				ISBsToRegister.push_back(_wcsdup(path)); // We have to wait until first registration attempt or we'll hit a null pointer
-			}
+		// _wcsdup might leak memory but not much. Freeing it upon consumption crashes the app so...
+		auto extension = entry.path().extension();
+		if (extension == L".tfc") {
+			auto tfcPath = entry.path().c_str();
+			writeln(L"\t\tFound TFC: %s", tfcPath);
+			DLCTFCsToRegister.push_back(new FString(_wcsdup(tfcPath))); // We have to wait until first registration attempt or we'll hit a null pointer
+		}
+		else if (extension == L".isb")
+		{
+			// Register ISB
+			auto isbPath = entry.path().c_str();
+			writeln(L"\t\tFound ISB: %s", isbPath);
+			ISBsToRegister.push_back(_wcsdup(isbPath)); // We have to wait until first registration attempt or we'll hit a null pointer
 		}
 	}
-	ContentScanComplete = true;
-	writeln(L"Completed DLC content detection");
+}
+ContentScanComplete = true;
+writeln(L"Completed DLC content detection");
 
-	// Hook stuff that won't be needed until like 10-15 seconds into the game
+// Hook stuff that won't be needed until like 10-15 seconds into the game
 
 #if !NDEBUG
 	// Hook ProcessEvent for debugging.
@@ -397,7 +399,6 @@ SPI_IMPLEMENT_ATTACH
 	//writeln("RootObject currently at 0x%p", RootObject);
 	RootObject = (tUObjectRoot)((char*)RootObject - 0x10);
 	//writeln("Actual RootObject is at 0x%p", RootObject);
-
 
 	return true;
 }
