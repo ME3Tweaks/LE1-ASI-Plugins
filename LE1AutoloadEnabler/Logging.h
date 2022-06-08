@@ -1,5 +1,4 @@
 #pragma once
-#include "../LE1-SDK/Common.h"
 #include "ExtraContent.h"
 
 struct CompileTimeSelectedStreamProvider final

@@ -7,7 +7,7 @@
 #include <vector>
 #include <Windows.h>
 #include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
+#include "../../Shared-ASI/Common.h"
 #include "../LE1-SDK/SdkHeaders.h"
 #include "ExtraContent.h"
 #include "Logging.h"
