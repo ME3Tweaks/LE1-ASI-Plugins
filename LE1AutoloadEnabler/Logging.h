@@ -15,7 +15,7 @@ public:
     void Initialize()
     {
 #if NDEBUG
-        stream_ = fopen("LE1Autoload.log", "w");
+    	stream_ = _wfsopen((GetGameExePath() / L"LE1Autoload.log").c_str(), L"w", _SH_DENYWR);
         if (!stream_)
         {
             MessageBoxA(nullptr, "Failed to open log file in Release build, logging is disabled.", "LE1Autoload error", MB_OK | MB_ICONERROR);
@@ -42,7 +42,7 @@ public:
 
     FILE* Stream() const noexcept
     {
-#if NDEBUG
+#if FNDEBUG
         return stream_ ? stream_ : stdout;
 #else
         return stdout;
@@ -54,4 +54,4 @@ CompileTimeSelectedStreamProvider GLogStreamProvider;
 
 #define initLog()           GLogStreamProvider.Initialize();
 #define closeLog()          GLogStreamProvider.Wrapup();
-#define writeln(msg,...)    fwprintf_s(GLogStreamProvider.Stream(), msg "\n", __VA_ARGS__);
+#define writeln(msg,...)    if (GLogStreamProvider.Stream() != nullptr) { fwprintf_s(GLogStreamProvider.Stream(), msg "\n", __VA_ARGS__); }

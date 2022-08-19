@@ -200,7 +200,7 @@ public:
 
 	ME3TweaksASILogger(const char* loggername, const char* _logfname) {
 		logfname = _logfname;
-		fopen_s(&log, logfname, "w");
+		log = _fsopen(logfname, "w", _SH_DENYWR);
 
 		boottime = GetTickCount64();
 		writeToLog("ME3Tweaks ASI Logger - By Mgamerz\n"s, false);
