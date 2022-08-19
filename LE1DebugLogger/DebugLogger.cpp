@@ -44,6 +44,14 @@ UObject* CreateImport_hook(ULinkerLoad* Context, int i)
 	return object;
 }
 
+// Logs a message from a source
+void logMessage(const wchar_t* logSource, wchar_t* formatStr, void* param1, void* param2)
+{
+	// We have to prepare the formatting string since it's an inbound parameter
+	auto preString = wstring_format(L"%s: %s", logSource, formatStr);
+	logger.writeToLog(wstring_format(preString.data(), param1, param2), true, true);
+}
+
 #pragma region FOutputDevice::Logf
 void FOutputDeviceLogf_hook(void* fOutputDevice, int* code, wchar_t* formatStr, void* param1)
 {
