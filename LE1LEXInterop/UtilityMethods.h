@@ -21,22 +21,6 @@ bool NopOutMemory(void* startPos, int patchSize)
 	return true;
 }
 
-bool PatchMemory(void* address, const void* patch, const SIZE_T patchSize)
-{
-	//make the memory we're going to patch writeable
-	DWORD  oldProtect;
-	if (!VirtualProtect(address, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect))
-		return false;
-
-	//overwrite with our patch
-	memcpy(address, patch, patchSize);
-
-	//restore the memory's old protection level
-	VirtualProtect(address, patchSize, oldProtect, &oldProtect);
-	FlushInstructionCache(GetCurrentProcess(), address, patchSize);
-	return true;
-}
-
 char* GetUObjectClassName(UObject* object)
 {
 	static char cOutBuffer[256];

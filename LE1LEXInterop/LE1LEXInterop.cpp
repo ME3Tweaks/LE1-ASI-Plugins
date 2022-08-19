@@ -13,7 +13,7 @@
 #include "Strsafe.h"
 
 // Game: LE1
-#define LE1
+#define GAMELE1
 
 // To build this, you need to use the LEASIMods repo so these shared files are available
 #include "..\\..\\Shared-ASI\\LEXInterop\\LEXInterop.h"
