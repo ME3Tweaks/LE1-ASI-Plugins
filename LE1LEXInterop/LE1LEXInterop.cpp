@@ -21,8 +21,6 @@
 // Featureset
 #include <thread>
 
-
-
 #pragma comment(lib, "shlwapi.lib")
 
 SPI_PLUGINSIDE_SUPPORT(L"LE1 LEX Interop", L"2.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
@@ -30,7 +28,6 @@ SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
 TCHAR SplashPath[MAX_PATH];
-HANDLE hPipe;
 LPOVERLAPPED pipeOverlap;
 
 #pragma region TLKLookup
@@ -50,10 +47,6 @@ FString* TLKLookup_hook(void* param1, FString* outString, int stringID, BOOL bPa
 	//	std::this_thread::sleep_for(chrono::seconds(countBetween));
 	//	countBetween = 0; // Debugger should attach by now
 	//}
-	if (stringID == TLK_STRID_GPS)
-	{
-		writeln(L"HIT");
-	}
 	map<int, FString>::iterator it = tlkOverride.find(stringID);
 	if (it != tlkOverride.end())
 	{
@@ -114,8 +107,6 @@ void sendInGameNotification(wchar_t* shortMessage, int tlkIDToUse)
 
 
 
-
-
 SPI_IMPLEMENT_ATTACH
 {
 	Common::OpenConsole();
@@ -125,7 +116,7 @@ SPI_IMPLEMENT_ATTACH
 	// Cache the pointer so we can install a hook later (if needed)
 	SharedData::SPIInterfacePtr = InterfacePtr;
 
-	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");
+	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT);
 	INIT_HOOK_PATTERN(ProcessEvent);
 
 	// LE1: Override TLK for user notification
