@@ -83,7 +83,7 @@ public:
 				player->ConsoleCommand(conCommand, false);
 			}
 
-			delete[] conCommand;
+			delete[] conCommand; // Free
 			return true;
 		}
 

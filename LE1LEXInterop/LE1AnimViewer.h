@@ -6,7 +6,7 @@ class LEAnimViewer
 {
 private:
 
-#ifdef LE1
+#ifdef GAMELE1
 	// Memory pre-allocated for use with passing to kismet, since FString doesn't copy it
 	static wchar_t ActorFullMemoryPath[1024];
 	static std::wstring ActorMemoryPath;
@@ -153,9 +153,8 @@ bool LEAnimViewer::initialized = false;
 tIsWindowFocused LEAnimViewer::IsWindowFocused = nullptr;
 tIsWindowFocused LEAnimViewer::IsWindowFocused_orig = nullptr;
 
-#ifdef LE1
+#ifdef GAMELE1
 wchar_t LEAnimViewer::ActorFullMemoryPath[1024];
 std::wstring LEAnimViewer::ActorMemoryPath = L"BIOA_NOR_C.HMM.hench_pilot";
 std::wstring LEAnimViewer::ActorPackageFile = L"BIOA_NOR10_01_DS1";
-
 #endif

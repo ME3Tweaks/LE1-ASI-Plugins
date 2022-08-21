@@ -12,13 +12,15 @@ public:
 	// Return false if not handled.
 	static bool HandleCommand(char* command)
 	{
-		if (startsWith("ACTIVATE_GPS", command))
+		if (startsWith("ACTIVATE_PLAYERGPS", command))
 		{
+			writeln("Activaing player GPS");
 			playerGPSActive = true;
 			return true;
 		}
-		if (startsWith("DEACTIVATE_GPS", command))
+		if (startsWith("DEACTIVATE_PLAYERGPS", command))
 		{
+			writeln("Deactivating player GPS");
 			playerGPSActive = false;
 			return true;
 		}

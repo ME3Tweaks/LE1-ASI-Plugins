@@ -1,9 +1,9 @@
 #pragma once
 
 // Typedefs
-#if defined(LE1) || defined(LE2)
+#if defined(GAMELE1) || defined(GAMELE2)
 typedef BOOL(*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove);
-#elif LE3
+#elif GAMELE3
 typedef BOOL(*tFarMoveActor)(UWorld* world, AActor* actor, FVector& destPos, BOOL test, BOOL noCollisionCheck, BOOL attachMove, BOOL unknown);
 #endif
 
@@ -275,9 +275,9 @@ private:
 			return true;
 
 		// LE1 and LE2 have same byte signature
-#if defined(LE1) || defined(LE2)
+#if defined(GAMELE1) || defined(GAMELE2)
 		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 56 48 8d 6c 24 d9 48 81 ec a0 00 00 00");
-#elif LE3
+#elif GAMELE3
 		// LE3 method has an extra bool parameter
 		INIT_FIND_PATTERN_POSTHOOK(FarMoveActor,/*"40 55 53 57 41*/ "54 41 57 48 8d 6c 24 e1 48 81 ec b0 00 00 00");
 #endif
