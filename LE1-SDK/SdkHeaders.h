@@ -116,7 +116,7 @@ const UINT    NAMEENTRY_LENGTH_MASK = (512 - 1) << NAMEENTRY_UPPERHASH_BITS;
 const UINT    NAMEENTRY_LENGTH_SHIFT = NAMEENTRY_UPPERHASH_BITS;
 const UINT    NAMEENTRY_COMPARE_MASK = 0x5fffffff;
 
-#pragma pack(1)
+#pragma pack(push, 1)
 /** Name as seen in some kind of name pool. */
 struct FNameEntry
 {
@@ -134,8 +134,6 @@ struct FNameEntry
 	}
 };
 
-
-#pragma pack(1)
 /** Name reference as seen in individual UObjects. */
 struct FName
 {
@@ -341,3 +339,5 @@ struct FObjectImport : public FObjectResource
 #include "SDK_HEADERS\\SFXQA_functions.h"
 
 #pragma warning( enable : 26495 )
+
+#pragma pack(pop)

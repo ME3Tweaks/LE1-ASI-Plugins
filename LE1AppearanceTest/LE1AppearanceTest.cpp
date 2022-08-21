@@ -5,7 +5,7 @@
 #include "../LE1-SDK/Common.h"
 #include "../LE1-SDK/SdkHeaders.h"
 #include "../LE1-SDK/ME3TweaksHeader.h"
-#include "../ConsoleCommandParsing.h"
+#include "../../Shared-ASI/ConsoleCommandParsing.h"
 
 
 #define MYHOOK "HBTesting_"
