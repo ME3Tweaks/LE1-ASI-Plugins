@@ -1,6 +1,6 @@
-#define GAME_LE1
-//#define GAME_LE2
-//#define GAME_LE3
+#define GAMELE1
+//#define GAMELE2
+//#define GAMELE3
 
 
 #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
@@ -15,9 +15,9 @@
 
 #include "BreakPointContainer.h"
 #include "ScriptDebugLogger.h"
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "UnrealScriptDefinitions.h"
 #include "../../Shared-ASI/ConsoleCommandParsing.h"
 #pragma comment(lib, "shlwapi.lib")
@@ -36,7 +36,7 @@ struct OutParmInfo
 	OutParmInfo* Next;
 };
 
-#if defined GAME_LE1
+#if defined GAMELE1
 struct FFrame
 {
 	void* vtable;
@@ -48,9 +48,9 @@ struct FFrame
 	FFrame* PreviousFrame;
 	OutParmInfo* OutParms;
 };
-#elif defined GAME_LE2
+#elif defined GAMELE2
 
-#elif defined GAME_LE3
+#elif defined GAMELE3
 
 #endif
 

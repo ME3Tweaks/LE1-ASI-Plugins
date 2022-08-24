@@ -11,8 +11,6 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common.h" />
-    <ClInclude Include="..\Interface.h" />
     <ClInclude Include="SdkHeaders.h" />
     <ClInclude Include="SdkInitializer.h" />
   </ItemGroup>

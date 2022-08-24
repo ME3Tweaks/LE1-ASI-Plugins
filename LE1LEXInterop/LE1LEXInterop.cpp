@@ -16,7 +16,7 @@
 #define GAMELE1
 
 // To build this, you need to use the LEASIMods repo so these shared files are available
-#include "..\\..\\Shared-ASI\\LEXInterop\\LEXInterop.h"
+#include "../../Shared-ASI/LEXInterop/LEXInterop.h"
 
 // Featureset
 #include <thread>
@@ -47,7 +47,7 @@ FString* TLKLookup_hook(void* param1, FString* outString, int stringID, BOOL bPa
 	//	std::this_thread::sleep_for(chrono::seconds(countBetween));
 	//	countBetween = 0; // Debugger should attach by now
 	//}
-	map<int, FString>::iterator it = tlkOverride.find(stringID);
+	const auto it = tlkOverride.find(stringID);
 	if (it != tlkOverride.end())
 	{
 		//element found;
@@ -83,19 +83,19 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 	// Implementations should take care to allow follow up invocations if it might be appropriate
 	// This is a debug tool; performance loss is to be expected
 
-	SharedData::ProcessEvent(Context, Function, Parms, Result); // Update the shared data automatically
+	SharedData::ProcessEvent(Context, Function, Parms, Result) // Update the shared data automatically
 
-	bool continueChecking = LEXCommunications::ProcessEvent(Context, Function, Parms, Result);
-	if (continueChecking) continueChecking = LEPathfindingGPS::ProcessEvent(Context, Function, Parms, Result);
-	if (continueChecking) continueChecking = LELiveLevelEditor::ProcessEvent(Context, Function, Parms, Result);
-	if (continueChecking) continueChecking = LEAnimViewer::ProcessEvent(Context, Function, Parms, Result);
+	|| LEXCommunications::ProcessEvent(Context, Function, Parms, Result)
+	|| LEPathfindingGPS::ProcessEvent(Context, Function, Parms, Result)
+	|| LELiveLevelEditor::ProcessEvent(Context, Function, Parms, Result)
+	|| LEAnimViewer::ProcessEvent(Context, Function, Parms, Result);
 
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
 
 
 // Note: Doesn't work. Game doesn't show notification
-void sendInGameNotification(wchar_t* shortMessage, int tlkIDToUse)
+void sendInGameNotification(wchar_t* shortMessage, const int tlkIDToUse)
 {
 	auto bioWorldInfo = reinterpret_cast<ABioWorldInfo*>(FindObjectOfType(ABioWorldInfo::StaticClass()));
 	if (bioWorldInfo && bioWorldInfo->EventNotifier)
@@ -116,18 +116,16 @@ SPI_IMPLEMENT_ATTACH
 	// Cache the pointer so we can install a hook later (if needed)
 	SharedData::SPIInterfacePtr = InterfacePtr;
 
-	INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT);
-	INIT_HOOK_PATTERN(ProcessEvent);
+	INIT_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT)
 
 	// LE1: Override TLK for user notification
-	INIT_FIND_PATTERN_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00");
-	INIT_HOOK_PATTERN(TLKLookup);
+	INIT_POSTHOOK(TLKLookup, /*"48 89 54 24 10*/ "56 57 41 56 48 83 ec 30 48 c7 44 24 28 fe ff ff ff 48 89 5c 24 50 48 89 6c 24 60 45 8b f1 41 8b e8 48 8b da 48 8b f1 33 c0 89 44 24 20 48 89 02 48 89 42 08 c7 44 24 20 01 00 00 00")
 
 	// Used to dynamically register a package
 	// This is hooked so we can capture the first parameter address
-	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9");
-	INIT_FIND_PATTERN_POSTHOOK(CacheContent, /*"48 8b c4 44 89"*/ "48 20 44 89 40 18 55 56 57 41 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec a0 00 00 00");
-	INIT_HOOK_PATTERN(CacheContentWrapper); // For ISB registration
+	INIT_FIND_PATTERN_POSTHOOK(CacheContentWrapper, /*48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec 00 01 00 00 48 c7 45 27 fe ff ff ff 48 89 58 08 48 89 70 10 48 89 78 18 45 8b e9")
+	INIT_FIND_PATTERN_POSTHOOK(CacheContent, /*"48 8b c4 44 89"*/ "48 20 44 89 40 18 55 56 57 41 54 41 55 41 56 41 57 48 8d 68 a1 48 81 ec a0 00 00 00")
+	INIT_HOOK_PATTERN(CacheContentWrapper) // For ISB registration
 
 	// I'm not sure how this handles the scope
 	writeln("Making pipe thread");
@@ -144,7 +142,7 @@ SPI_IMPLEMENT_DETACH
 	return true;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  reason, LPVOID) {
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID) {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
 		//GetModuleFileName(hModule, SplashPath, MAX_PATH);

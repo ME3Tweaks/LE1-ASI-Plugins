@@ -1,14 +1,12 @@
-#include <stdio.h>
-#include <io.h>
-#include <string>
 #include <fstream>
 #include <iostream>
-#include <ostream>
-#include <streambuf>
-#include <sstream>
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+#include <cstdio>
+
+#define GAMELE1
+
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 
 #define MYHOOK "KismetLogger_"
 
@@ -29,7 +27,7 @@ tProcessEvent ProcessEvent = nullptr;
 tProcessEvent ProcessEvent_orig = nullptr;
 void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void* Result)
 {
-    auto szName = Function->GetFullName();
+	const auto szName = Function->GetFullName();
     logger.writeToLog(string_format("%s\n", szName), true);
     logger.flush();
     ProcessEvent_orig(Context, Function, Parms, Result);

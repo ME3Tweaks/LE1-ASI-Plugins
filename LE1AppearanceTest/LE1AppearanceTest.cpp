@@ -1,10 +1,9 @@
 #include <string>
 
 #include "AppearanceHUD.h"
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/SdkHeaders.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "../../Shared-ASI/ConsoleCommandParsing.h"
 
 

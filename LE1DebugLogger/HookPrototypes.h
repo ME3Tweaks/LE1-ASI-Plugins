@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 
 #define MYHOOK "DebugLogger_"
 
@@ -184,7 +184,7 @@ UWorld* GWorld = nullptr;
 // UTILITY METHODS ======================================================================
 
 // Searches for the specified byte pattern, which is a 7-byte mov or lea instruction, with the 'source' operand being the address being calculated
-void* findAddressLeaMov(ISharedProxyInterface* InterfacePtr, char* name, char* bytePattern)
+void* findAddressLeaMov(ISharedProxyInterface* InterfacePtr, const char* name, const char* bytePattern)
 {
 	void* patternAddr;
 	if (const auto rc = InterfacePtr->FindPattern(&patternAddr, bytePattern);

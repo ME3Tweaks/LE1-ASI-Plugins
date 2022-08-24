@@ -65,7 +65,7 @@ public:
 			return true;
 		}
 
-#ifdef LE1
+#ifdef GAMELE1
 		else if (stringStartsWith("ANIMV_CHANGE_PAWN ", command))
 		{
 			// Test code.

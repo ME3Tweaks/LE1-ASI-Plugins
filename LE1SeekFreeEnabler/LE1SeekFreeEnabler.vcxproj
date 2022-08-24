@@ -13,9 +13,6 @@
   <ItemGroup>
     <ClCompile Include="LE1SeekFreeEnabler.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Header.h" />
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

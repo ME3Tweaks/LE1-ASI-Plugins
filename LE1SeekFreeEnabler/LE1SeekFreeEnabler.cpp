@@ -6,7 +6,12 @@
 #include <ostream>
 #include <streambuf>
 #include <sstream>
-#include "Header.h"
+
+#define GAMELE1
+
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 
 #define SEEKFREEHOOK "LE1SeekFreeEnabler_"
 

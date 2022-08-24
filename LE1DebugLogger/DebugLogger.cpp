@@ -4,6 +4,8 @@
 #include <fstream>
 #include <thread>
 
+#define GAMELE1
+
 #include "HookPrototypes.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"5.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);

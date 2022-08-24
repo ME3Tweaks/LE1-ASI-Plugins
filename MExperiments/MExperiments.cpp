@@ -1,4 +1,4 @@
-#include <stdio.h>
+#include <cstdio>
 #include <io.h>
 #include <string>
 #include <fstream>
@@ -7,9 +7,12 @@
 #include <random>
 #include <streambuf>
 #include <sstream>
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/ME3TweaksHeader.h"
+
+#define GAMELE1
+
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 
 #define MYHOOK "MExperiments_"
 

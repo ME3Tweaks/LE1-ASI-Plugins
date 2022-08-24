@@ -12,13 +12,13 @@ public:
 	// Return false if not handled.
 	static bool HandleCommand(char* command)
 	{
-		if (startsWith("ACTIVATE_PLAYERGPS", command))
+		if (IsCmd(&command, "ACTIVATE_PLAYERGPS"))
 		{
 			writeln("Activaing player GPS");
 			playerGPSActive = true;
 			return true;
 		}
-		if (startsWith("DEACTIVATE_PLAYERGPS", command))
+		if (IsCmd(&command, "DEACTIVATE_PLAYERGPS"))
 		{
 			writeln("Deactivating player GPS");
 			playerGPSActive = false;
@@ -32,10 +32,9 @@ public:
 	// Return false if other features shouldn't be able to also handle this function call
 	static bool ProcessEvent(UObject* Context, UFunction* Function, void* Parms, void* Result)
 	{
-		if (LEPathfindingGPS::playerGPSActive && IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
+		if (playerGPSActive && IsA<ABioPlayerController>(Context) && strcmp(Function->GetName(), "PlayerTick") == 0)
 		{
-			const auto playerController = static_cast<ABioPlayerController*>(Context);
-			if (playerController) {
+			if (const auto playerController = static_cast<ABioPlayerController*>(Context)) {
 				// PLAYER GPS
 				if (playerController->Pawn != nullptr)
 				{

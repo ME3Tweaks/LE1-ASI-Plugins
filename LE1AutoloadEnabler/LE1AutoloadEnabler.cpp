@@ -6,9 +6,9 @@
 #include <thread>
 #include <vector>
 #include <Windows.h>
-#include "../LE1-SDK/Interface.h"
+#include "../../Shared-ASI/Interface.h"
 #include "../../Shared-ASI/Common.h"
-#include "../LE1-SDK/SdkHeaders.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "ExtraContent.h"
 #include "Logging.h"
 

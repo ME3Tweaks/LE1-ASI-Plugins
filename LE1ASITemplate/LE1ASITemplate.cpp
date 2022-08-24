@@ -1,6 +1,9 @@
-#include "../LE1-SDK/Interface.h"
-#include "../LE1-SDK/Common.h"
-#include "../LE1-SDK/SdkHeaders.h"
+
+#define GAMELE1
+
+#include "../../Shared-ASI/Interface.h"
+#include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 
 
 #define MYHOOK "HookName_"
