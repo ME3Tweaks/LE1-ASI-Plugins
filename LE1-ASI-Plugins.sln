@@ -9,8 +9,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SeqActLog Enabler", "SeqAct
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1StreamingLevelsHUD", "LE1StreamingLevelsHUD\LE1StreamingLevelsHUD.vcxproj", "{24261DB1-E217-4234-B048-1ACEA2F67237}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1SeekFreeEnabler", "LE1SeekFreeEnabler\LE1SeekFreeEnabler.vcxproj", "{34261DB1-E217-4234-B048-1ACEA2F67237}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnrealscriptDebugger", "UnrealscriptDebugger\UnrealscriptDebugger.vcxproj", "{4F602A1F-BB35-458B-87D6-FE11AD430902}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "KismetLogger", "KismetLogger\KismetLogger.vcxproj", "{1F82E847-1848-4F1E-B458-E008C2FF8F43}"
@@ -67,12 +65,6 @@ Global
 		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x64.Build.0 = Release|x64
 		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x86.ActiveCfg = Release|Win32
 		{24261DB1-E217-4234-B048-1ACEA2F67237}.Release|x86.Build.0 = Release|Win32
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x64.ActiveCfg = Debug|x64
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x64.Build.0 = Debug|x64
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Debug|x86.ActiveCfg = Debug|x64
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Release|x64.ActiveCfg = Release|x64
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Release|x64.Build.0 = Release|x64
-		{34261DB1-E217-4234-B048-1ACEA2F67237}.Release|x86.ActiveCfg = Release|x64
 		{4F602A1F-BB35-458B-87D6-FE11AD430902}.Debug|x64.ActiveCfg = Debug|x64
 		{4F602A1F-BB35-458B-87D6-FE11AD430902}.Debug|x64.Build.0 = Debug|x64
 		{4F602A1F-BB35-458B-87D6-FE11AD430902}.Debug|x86.ActiveCfg = Debug|x64

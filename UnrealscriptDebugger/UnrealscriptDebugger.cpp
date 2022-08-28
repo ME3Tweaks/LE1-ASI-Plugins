@@ -29,25 +29,8 @@ SPI_PLUGINSIDE_SUPPORT(L"UnrealscriptDebugger", L"SirCxyrtyx", L"0.1.0", SPI_GAM
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_ASYNCATTACH;
 
-struct OutParmInfo
-{
-	UProperty* Prop;
-	BYTE* PropAddr;
-	OutParmInfo* Next;
-};
-
 #if defined GAMELE1
-struct FFrame
-{
-	void* vtable;
-	int unks[3];
-	UStruct* Node;
-	UObject* Object;
-	BYTE* Code;
-	BYTE* Locals;
-	FFrame* PreviousFrame;
-	OutParmInfo* OutParms;
-};
+
 #elif defined GAMELE2
 
 #elif defined GAMELE3
