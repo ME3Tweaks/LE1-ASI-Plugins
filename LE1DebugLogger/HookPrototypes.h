@@ -27,25 +27,6 @@ enum ELoadFlags
 };
 
 // STRUCTS ===============================================
-struct OutParmInfo
-{
-	UProperty* Prop;
-	BYTE* PropAddr;
-	OutParmInfo* Next;
-};
-
-struct LE1FFrame
-{
-	void* vtable; // 0x0
-	int unknown[3];
-	UStruct* Node;
-	UObject* Object;
-	BYTE* Code;
-	BYTE* Locals;
-	LE1FFrame* PreviousFrame;
-	OutParmInfo* OutParms;
-};
-
 
 struct FPackageFileCache;
 
@@ -154,7 +135,7 @@ struct UnLinker
 
 };
 
-typedef void (*tNativeFunction) (UObject* Context, LE1FFrame* Stack, void* Result);
+typedef void (*tNativeFunction) (UObject* Context, FFrame* Stack, void* Result);
 tNativeFunction* GNatives = nullptr;
 
 
@@ -369,7 +350,7 @@ tMessageBoxF MsgFDialog = nullptr;
 tMessageBoxF MsgFDialog_orig = nullptr;
 
 // Called by UnrealScript
-typedef void (*tLogInternalNative)(UObject* callingObject, LE1FFrame* param2);
+typedef void (*tLogInternalNative)(UObject* callingObject, FFrame* param2);
 tLogInternalNative LogInternal = nullptr;
 tLogInternalNative LogInternal_orig = nullptr;
 

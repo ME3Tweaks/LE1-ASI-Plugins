@@ -71,7 +71,8 @@
       <AdditionalDependencies>shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /y "C:\Users\mgame\source\repos\ME3Tweaks\LE1-ASI-Plugins\x64\Debug\LE1AutoloadEnabler.asi" "B:\SteamLibrary\steamapps\common\Mass Effect Legendary Edition\Game\ME1\Binaries\Win64\ASI\LE1AutoloadEnabler.asi"</Command>
+      <Command>
+      </Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

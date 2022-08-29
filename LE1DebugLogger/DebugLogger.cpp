@@ -66,7 +66,7 @@ void FErrorOutputDeviceLogf_hook(void* outputDevice, wchar_t* formatStr, void* p
 
 #pragma region LogInternal
 
-void LogInternal_hook(UObject* callingObject, LE1FFrame* stackFrame)
+void LogInternal_hook(UObject* callingObject, FFrame* stackFrame)
 {
 	// 0x20 = Object?
 	// 0x28 = Code?
@@ -77,7 +77,7 @@ void LogInternal_hook(UObject* callingObject, LE1FFrame* stackFrame)
 	BYTE nativeIndex = *stackFrame->Code++;
 	FString stringArg;
 	UObject* sfObject = stackFrame->Object;
-	GNatives[nativeIndex](sfObject, (LE1FFrame*)stackFrame, &stringArg);
+	GNatives[nativeIndex](sfObject, (FFrame*)stackFrame, &stringArg);
 
 	// Kinda jank way to re-use this code by making it create a string a certain way
 	logMessage(L"LogInternal() from %hs", L"%s", callingObject->GetFullName(), stringArg.Data);

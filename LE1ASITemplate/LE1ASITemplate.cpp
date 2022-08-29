@@ -1,5 +1,6 @@
 
 #define GAMELE1
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 
 #include "../../Shared-ASI/Interface.h"
 #include "../../Shared-ASI/Common.h"

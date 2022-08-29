@@ -1,13 +1,15 @@
 // This project was forked from d00telemental's LE1AutoloadEnabler repository on 02/03/2022: https://github.com/d00telemental/LENativeExperiments
 // due to difficulty building project from that repo and extensions made in this one
 
+#define GAMELE1
+
 #include <filesystem>
 #include <Shlwapi.h>
 #include <thread>
 #include <vector>
 #include <Windows.h>
-#include "../../Shared-ASI/Interface.h"
 #include "../../Shared-ASI/Common.h"
+#include "../../Shared-ASI/Interface.h"
 #include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "ExtraContent.h"
 #include "Logging.h"

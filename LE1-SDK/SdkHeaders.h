@@ -338,27 +338,6 @@ struct FObjectImport : public FObjectResource
 #include "SDK_HEADERS\\SFXQA_f_structs.h"
 #include "SDK_HEADERS\\SFXQA_functions.h"
 
-// Out parameter info for native calls
-struct OutParmInfo
-{
-	UProperty* Prop;
-	BYTE* PropAddr;
-	OutParmInfo* Next;
-};
-
-// LE1-specific FFrame
-struct FFrame
-{
-	void* vtable; // 0x0
-	int unknown[3];
-	UStruct* Node;
-	UObject* Object;
-	BYTE* Code;
-	BYTE* Locals;
-	FFrame* PreviousFrame;
-	OutParmInfo* OutParms;
-};
-
 #pragma warning( enable : 26495 )
 
 #pragma pack(pop)
