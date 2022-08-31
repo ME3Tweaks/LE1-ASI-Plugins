@@ -92,6 +92,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -95,9 +95,9 @@ char* UObject::GetNameCPP()
 
 char* UObject::GetFullName(bool includeClass)
 {
+	static char cOutBuffer[512];
 	if (this->Class && this->Outer)
 	{
-		static char cOutBuffer[256];
 
 		if (this->Outer->Outer)
 		{
@@ -136,7 +136,6 @@ char* UObject::GetFullName(bool includeClass)
 	// It's a root object, such as a package file itself
 	if (this->Class)
 	{
-		static char cOutBuffer[256];
 		strcpy_s(cOutBuffer, this->Class->GetName());
 		strcat_s(cOutBuffer, " ");
 		strcat_s(cOutBuffer, this->GetName());
