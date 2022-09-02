@@ -38,7 +38,7 @@ SPI_IMPLEMENT_ATTACH
 {
     Common::OpenConsole();
 
-    auto _ = SDKInitializer::Instance();
+	INIT_CHECK_SDK()
     writeln(L"Crash game as soon as possible in order to keep log size down");
 
     INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, /* 40 55 41 56 41 */ "57 48 81 EC 90 00 00 00 48 8D 6C 24 20");

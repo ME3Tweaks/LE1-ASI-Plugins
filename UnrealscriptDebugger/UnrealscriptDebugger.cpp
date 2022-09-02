@@ -764,7 +764,7 @@ SPI_IMPLEMENT_ATTACH
 
 	logger.Open(logPath);
 
-	auto _ = SDKInitializer::Instance();
+	INIT_CHECK_SDK()
 
 	ProxyInterface = InterfacePtr;
 
