@@ -190,7 +190,7 @@ struct FName
 	}
 
 
-	char* Instanced()
+	char* Instanced() const
 	{
 		if (Number > 0)
 		{
