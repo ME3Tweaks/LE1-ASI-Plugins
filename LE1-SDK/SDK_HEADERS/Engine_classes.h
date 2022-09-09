@@ -8171,8 +8171,17 @@ UClass* UDrawSoundRadiusComponent::pClassPointer = NULL;
 // 0x0034 (0x0254 - 0x0220)
 class ULineBatchComponent : public UPrimitiveComponent
 {
+	struct FPrimitiveDrawInterfaceVTable 
+	{
+		void* VirtualFunction_0x00;
+		void* VirtualFunction_0x08;
+		void* VirtualFunction_0x10;
+		void* VirtualFunction_0x18;
+		void (*DrawLine)(void* self, const FVector& start, const FVector& end, const FLinearColor& color, BYTE depth, const float thickness);
+	};
+
 public:
-	struct FPointer                                    FPrimitiveDrawInterfaceVfTable;                   		// 0x0220 (0x0008) [0x0000000000801002]              ( CPF_Const | CPF_Native | CPF_NoExport )
+	struct FPrimitiveDrawInterfaceVTable*              FPrimitiveDrawInterfaceVfTable;                   		// 0x0220 (0x0008) [0x0000000000801002]              ( CPF_Const | CPF_Native | CPF_NoExport )
 	struct FPointer                                    FPrimitiveDrawInterfaceView;                      		// 0x0228 (0x0008) [0x0000000000801002]              ( CPF_Const | CPF_Native | CPF_NoExport )
 	struct TArray<struct FPointer>                     BatchedLines;                                     		// 0x0230 (0x0010) [0x0000000000003002]              ( CPF_Const | CPF_Native | CPF_Transient )
 	struct TArray<struct FPointer>                     BatchedPoints;                                    		// 0x0240 (0x0010) [0x0000000000003002]              ( CPF_Const | CPF_Native | CPF_Transient )
@@ -14825,7 +14834,10 @@ UClass* UWaveFormBase::pClassPointer = NULL;
 class UWorld : public UObject
 {
 public:
-	unsigned char                                      UnknownData00[ 0x3F4 ];                           		// 0x0060 (0x03F4) MISSED OFFSET
+	unsigned char                                      UnknownData00[ 0x178 ];                           		// 0x0060 (0x0178) MISSED OFFSET
+	ULineBatchComponent*                               LineBatcher;                                             // 0x01D8 (0x0008) MISSED OFFSET
+	ULineBatchComponent*                               PersistentLineBatcher;                                   // 0x01E0 (0x0008) MISSED OFFSET
+	unsigned char                                      UnknownData01[ 0x26C ];                           		// 0x01E8 (0x026C) MISSED OFFSET
 
 private:
 	static UClass* pClassPointer;
