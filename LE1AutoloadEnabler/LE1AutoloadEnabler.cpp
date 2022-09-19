@@ -21,12 +21,19 @@ constexpr bool GIsRelease = false;
 constexpr bool GIsRelease = true;
 #endif
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.7.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.8.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_SEQATTACH;
 
 bool ContentScanComplete = false;
 
+// Fixes bad launcher logic when not using Autoboot (sets the wrong working directory)
+void SetWorkingDirectory() {
+	WCHAR path[MAX_PATH];
+	GetModuleFileNameW(NULL, path, MAX_PATH);
+	std::filesystem::path exePath = path;
+	SetCurrentDirectoryW(exePath.parent_path().c_str());
+}
 
 // Functions used to make a list of available DLCs.
 // ======================================================================
@@ -64,7 +71,7 @@ std::vector<std::wstring> GetAllDLCAutoloads(std::wstring&& searchRoot)
 				swprintf_s(autoloadPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
 				autoloadPaths.emplace_back(autoloadPath);
 			}
-		} while (FindNextFile(handle, &fd) != 0);
+		} while (FindNextFile(handle, &fd) != false);
 	}
 	return autoloadPaths;
 }
@@ -319,6 +326,7 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 
 SPI_IMPLEMENT_ATTACH
 {
+	SetWorkingDirectory(); // This need
 	initLog();
 
 // Find RegisterTFC so we can register TFCs
