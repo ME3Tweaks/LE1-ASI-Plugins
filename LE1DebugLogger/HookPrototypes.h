@@ -302,6 +302,10 @@ typedef UPackage* (*tLoadPackage)(void* param1, wchar_t* packageName, ELoadFlags
 tLoadPackage LoadPackage = nullptr;
 tLoadPackage LoadPackage_orig = nullptr;
 
+typedef UObject* (*tCreateExport)(ULinkerLoad* Context, int UIndex);
+tCreateExport CreateExport = nullptr;
+tCreateExport CreateExport_orig = nullptr;
+
 typedef uint32(*tAsyncLoadMethod)(UnLinker* linker, int a2, float a3);
 tAsyncLoadMethod LoadPackageAsyncTick = nullptr;
 tAsyncLoadMethod LoadPackageAsyncTick_orig = nullptr;
