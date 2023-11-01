@@ -16,7 +16,7 @@
     <ProjectGuid>{F5C37F91-930C-4037-B0A0-C8C352636899}</ProjectGuid>
     <RootNamespace>SeqActLog Enabler</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>FunctionLogger</ProjectName>
+    <ProjectName>LE1FunctionLogger</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -47,12 +47,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>FunctionLogger</TargetName>
+    <TargetName>LE1FunctionLogger</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.asi</TargetExt>
-    <TargetName>FunctionLogger</TargetName>
+    <TargetName>LE1FunctionLogger</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -90,7 +90,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="FunctionLogger.cpp" />
+    <ClCompile Include="LE1FunctionLogger.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

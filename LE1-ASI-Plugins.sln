@@ -15,7 +15,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "KismetLogger", "KismetLogge
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1LEXInterop", "LE1LEXInterop\LE1LEXInterop.vcxproj", "{3E825F49-5D7E-4064-B5B2-03011B408B6F}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FunctionLogger", "FunctionLogger\FunctionLogger.vcxproj", "{F5C37F91-930C-4037-B0A0-C8C352636899}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1FunctionLogger", "LE1FunctionLogger\LE1FunctionLogger.vcxproj", "{F5C37F91-930C-4037-B0A0-C8C352636899}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1DebugLogger", "LE1DebugLogger\LE1DebugLogger.vcxproj", "{C0B3993D-89FD-43D0-B1E3-B8A108197544}"
 EndProject
