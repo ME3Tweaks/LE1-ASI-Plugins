@@ -4,7 +4,9 @@
 #define GAMELE1
 
 #include <filesystem>
+#include <map>
 #include <Shlwapi.h>
+#include <Strsafe.h>
 #include <thread>
 #include <vector>
 #include <Windows.h>
@@ -12,6 +14,7 @@
 #include "../../Shared-ASI/Interface.h"
 #include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "ExtraContent.h"
+#include "IniFile.h"
 #include "Logging.h"
 
 #define MYHOOK "LE1AutoloadEnabler"
@@ -21,7 +24,7 @@ constexpr bool GIsRelease = false;
 constexpr bool GIsRelease = true;
 #endif
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"0.8.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"9.0.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_SEQATTACH;
 
@@ -54,26 +57,77 @@ std::wstring GetDLCsRoot()
 	return root;
 }
 
-std::vector<std::wstring> GetAllDLCAutoloads(std::wstring&& searchRoot)
-{
-	std::vector<std::wstring> autoloadPaths{};
-	searchRoot.append(L"*");
+// Autoload v7
+//std::vector<std::wstring> GetAllDLCAutoloads(std::wstring&& searchRoot)
+//{
+//	std::vector<std::wstring> autoloadPaths{};
+//	searchRoot.append(L"*");
+//
+//	WIN32_FIND_DATA fd;
+//	HANDLE handle = FindFirstFileW(searchRoot.c_str(), &fd);
+//	if (handle != INVALID_HANDLE_VALUE) {
+//		do
+//		{
+//			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
+//				&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
+//			{
+//				wchar_t autoloadPath[512];
+//				swprintf_s(autoloadPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
+//				autoloadPaths.emplace_back(autoloadPath);
+//			}
+//		} while (FindNextFile(handle, &fd) != false);
+//	}
+//	return autoloadPaths;
+//}
 
+// Autoload v8 - DLC mount order
+// Returns the order in which DLC folders should mount - map of mountnumber => DLC Folder name (NOT PATH!)
+void GetLE1DLCMountOrder(map<int, std::wstring>& dlcMountOrder, const TCHAR* dlcPath)
+{
+	// std::map<int, std::string> dlcFriendlyNames;
+	TCHAR enumeratePath[MAX_PATH];
 	WIN32_FIND_DATA fd;
-	HANDLE handle = FindFirstFileW(searchRoot.c_str(), &fd);
-	if (handle != INVALID_HANDLE_VALUE) {
-		do
+	TCHAR tmpPath[MAX_PATH];
+
+	StringCchCopy(enumeratePath, MAX_PATH, dlcPath);
+	StringCchCat(enumeratePath, MAX_PATH, L"*");
+
+	HANDLE hFind = FindFirstFile(enumeratePath, &fd);
+	do
+	{
+		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
+			&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
 		{
-			if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
-				&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
+			StringCchCopy(tmpPath, MAX_PATH, dlcPath);
+			StringCchCat(tmpPath, MAX_PATH, fd.cFileName);
+			StringCchCat(tmpPath, MAX_PATH, L"\\AutoLoad.ini");
+			const auto fileAttributes = GetFileAttributes(tmpPath);
+			if (fileAttributes != INVALID_FILE_ATTRIBUTES)
 			{
-				wchar_t autoloadPath[512];
-				swprintf_s(autoloadPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
-				autoloadPaths.emplace_back(autoloadPath);
+				const std::wstring iniPath(tmpPath);
+				IniFile autoLoad(iniPath);
+				auto strMount = autoLoad.readValue(L"ME1DLCMOUNT", L"ModMount");
+				if (!strMount.empty())
+				{
+					int mount = 0;
+					try
+					{
+						mount = std::stoi(strMount);
+					}
+					catch (...)
+					{
+						mount = 0;
+					}
+					if (mount > 0)
+					{
+						dlcMountOrder[mount] = fd.cFileName;
+						continue;
+					}
+				}
 			}
-		} while (FindNextFile(handle, &fd) != false);
-	}
-	return autoloadPaths;
+		}
+	} while (FindNextFile(hFind, &fd) != 0);
+	FindClose(hFind);
 }
 
 // HasAtLeastOneBasegameTFC: So we know when we can call RegisterTFC
@@ -352,16 +406,22 @@ INIT_CHECK_SDK();
 // Get a list of DLC Autoloads.
 writeln(L"Finding DLC content in %s...", GetDLCsRoot().c_str());
 
-for (const auto& autoload : GetAllDLCAutoloads(GetDLCsRoot())) // This has weird error 
+std::map<int, std::wstring> dlcMountOrder;
+
+std::wstring dlcRoot = GetDLCsRoot();
+GetLE1DLCMountOrder(dlcMountOrder, dlcRoot.c_str());
+for (const auto& autoload : dlcMountOrder) // This has weird error 
 {
-	writeln(L"Found DLC Autoload.ini: %s", autoload.c_str());
-	GExtraAutoloadPaths.emplace_back(autoload.c_str());
+	TCHAR tmpPath[MAX_PATH];
 
-	// It's a DLC mod, LE only has a single autoload.ini (Bring Down The Sky)
-	std::filesystem::path path = autoload.c_str();
-	auto dlcFolder = path.parent_path();
+	writeln(L"Found DLC Autoload.ini: %s, mount %i", autoload.second.c_str(), autoload.first);
+	GExtraAutoloadPaths.emplace_back(autoload.second.c_str());
 
-	for (const auto& entry : std::filesystem::recursive_directory_iterator(dlcFolder))
+	// It's a DLC mod. LE only has a single autoload.ini (Bring Down The Sky) and it's not in the DLC folder
+	StringCchCopy(tmpPath, MAX_PATH, dlcRoot.c_str());
+	StringCchCat(tmpPath, MAX_PATH, autoload.second.c_str());
+
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(tmpPath))
 	{
 		if (entry.is_directory())
 		{
