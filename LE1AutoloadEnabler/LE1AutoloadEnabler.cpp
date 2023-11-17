@@ -15,7 +15,6 @@
 #include "../../Shared-ASI/ME3Tweaks/ME3TweaksHeader.h"
 #include "ExtraContent.h"
 #include "IniFile.h"
-#include "Logging.h"
 
 #define MYHOOK "LE1AutoloadEnabler"
 #ifndef NDEBUG
@@ -24,9 +23,11 @@ constexpr bool GIsRelease = false;
 constexpr bool GIsRelease = true;
 #endif
 
-SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"9.0.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
+SPI_PLUGINSIDE_SUPPORT(L"LE1AutoloadEnabler", L"---", L"10.0.0", SPI_GAME_LE1, SPI_VERSION_LATEST);
 SPI_PLUGINSIDE_POSTLOAD;
 SPI_PLUGINSIDE_SEQATTACH;
+
+ME3TweaksASILogger logger("LE1Autoload Enabler v10", "LE1Autoload.log");
 
 bool ContentScanComplete = false;
 
@@ -146,7 +147,7 @@ std::vector<FString*> DLCTFCsToRegister;
 // Logs a message and registers a TFC
 void RegisterTFCWrapper(FString* tfcPath)
 {
-	writeln(L"Registering DLC mod TFC file: %s", tfcPath->Data);
+	logger.writeWideLineToLog(wstring_format(L"  Registering TFC: %s", tfcPath->Data), true);
 	RegisterTFC(tfcPath);
 	// This just crashes it idk why
 	//free(tfcPath->Data); // Data constructed here was made with _wcsdup
@@ -172,9 +173,11 @@ void ProcessIni_hook(ExtraContent* ExtraContent, FString* IniPath, FString* Base
 	if (!GOriginalCalled)
 	{
 		GOriginalCalled = true;
+		logger.writeWideLineToLog(L"Mounting DLC mods", true);
+
 		for (const auto& autoloadPath : GExtraAutoloadPaths)
 		{
-			writeln(L"Registering DLC mod Autoload.ini %s", autoloadPath.c_str());
+			logger.writeWideLineToLog(wstring_format(L"  Mounting DLC mod Autoload.ini %s", autoloadPath.c_str()), true);
 			ProcessIni(ExtraContent, &FString{ const_cast<wchar_t*>(autoloadPath.c_str()) }, nullptr);
 		}
 		GExtraContent = ExtraContent;
@@ -189,7 +192,7 @@ tUObjectRoot RootObject = nullptr; // We aren't hooking this, we just need to ca
 // UPackage (which means they are from this package)
 void RegisterStartupFile(UPackage* package)
 {
-	writeln(L"Registering startup file: %hs", package->Name.GetName());
+	logger.writeWideLineToLog(wstring_format(L"Mounting startup file: %hs", package->Name.GetName()), true);
 
 	auto GObjects = SDKInitializer::Instance()->GetObjects();
 	for (int i = 0; i < GObjects->Count; i++)
@@ -204,12 +207,25 @@ void RegisterStartupFile(UPackage* package)
 				outerMost = outerMost->Outer; // Go to it's nullptr
 			}
 
+			// Root the entire package
 			if (outerMost == package)
 			{
-				// It's a child of this package!
-				writeln(L"Rooting startup package object %hs in package %hs", obj->GetFullName(), package->Name.GetName())
-					RootObject(obj);
+				logger.writeWideLineToLog(wstring_format(L"  Rooting startup package object %hs", obj->GetFullName()), true);
+				RootObject(obj);
 			}
+
+			// Root objectreferencer references (this is how it should have been done, but probably too late now)
+			//if (outerMost == package && strcmp(obj->Class->Name.GetName(), "ObjectReferencer") == 0)
+			//{
+			//	// Object referencer is used for startup files
+			//	logger.writeWideLineToLog(wstring_format(L"  Rooting startup package object referencer %hs in package %hs", obj->GetFullName(), package->Name.GetName()), true);
+			//	auto objReferencer = (UObjectReferencer*)obj;
+			//	for (auto referencedObj : objReferencer->ReferencedObjects)
+			//	{
+			//		logger.writeWideLineToLog(wstring_format(L"    Rooting referenced object %hs", obj->GetFullName()), true);
+			//		RootObject(referencedObj);
+			//	}
+			//}
 		}
 	}
 }
@@ -261,7 +277,6 @@ void InstallDownloadableContent_hook(void* unk)
 // Renders autoload profiler, allows toggling it.
 // ======================================================================
 
-#ifndef NDEBUG
 typedef void (*tProcessEvent)(UObject* Context, UFunction* Function, void* Parms, void* Result);
 tProcessEvent ProcessEvent = nullptr;
 
@@ -275,7 +290,7 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 	{
 		if (!hud)
 		{
-			hud = new ExtraContentHUD{ !GIsRelease };
+			hud = new ExtraContentHUD { true }; // Requires -debugautoload so we will always draw
 		}
 		hud->Update(((ABioHUD*)Context)->Canvas, GExtraContent);
 		hud->Draw();
@@ -298,8 +313,6 @@ void ProcessEvent_hook(UObject* Context, UFunction* Function, void* Parms, void*
 	ProcessEvent_orig(Context, Function, Parms, Result);
 }
 
-#endif
-
 #pragma region CacheContent
 // ======================================================================
 // ISB Registration
@@ -318,9 +331,10 @@ void CacheContentWrapper_hook(long long parm1, wchar_t* filePath, bool replaceIf
 	if (!registeredISBs)
 	{
 		registeredISBs = true;
+		logger.writeWideLineToLog(L"Registering DLC mod ISBs", true);
 		for each (auto isb in ISBsToRegister)
 		{
-			writeln(L"Registering DLC mod ISB %s", isb);
+			logger.writeWideLineToLog(wstring_format(L"  Registering ISB: %s", isb), true);
 			CacheContentWrapper_orig(parm1, isb, true, false);
 			delete isb; // IDK if this is accurate...
 		}
@@ -353,17 +367,17 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 		int i = 5;
 		while (i > 0 && !ContentScanComplete)
 		{
-			writeln(L"Waiting for content scan to complete...");
+			logger.writeWideLineToLog(wstring_format(L"Waiting for content scan to complete..."), true);
 			std::this_thread::sleep_for(std::chrono::seconds(1));
 			i--;
 		}
 
 		if (i == 0 && !ContentScanComplete)
 		{
-			writeln(L"Content scan took too long, giving up waiting");
+			logger.writeWideLineToLog(wstring_format(L"Content scan took too long, giving up waiting"), true);
 		}
 
-		writeln(L"Performing TFC registration");
+		logger.writeWideLineToLog(wstring_format(L"Performing TFC registration"), true);
 		for each (auto tfcPath in DLCTFCsToRegister)
 		{
 			RegisterTFCWrapper(tfcPath);
@@ -380,9 +394,10 @@ void* SomethingFirstLoad_hook(long long* parm1, void* parm2, wchar_t** filePath,
 
 SPI_IMPLEMENT_ATTACH
 {
-	SetWorkingDirectory(); // This need
-	initLog();
-
+	SetWorkingDirectory(); // This needs done at startup
+	if (!GIsRelease) {
+		Common::OpenConsole();
+	}
 	// Find RegisterTFC so we can register TFCs
 	INIT_FIND_PATTERN_POSTHOOK(RegisterTFC, /*48 8b c4 57 41*/ "56 41 57 48 83 ec 60 48 c7 40 a8 fe ff ff ff 48 89 58 10 48 89 68 18 48 89 70 20 4c 8b f9 48 8b 0d 6e 3e 45 01 48 8b 01 48 8d 2d b0 9d d4 00 41 83 7f 08 00 74 05 49 8b 17 eb 03");
 
@@ -404,7 +419,7 @@ SPI_IMPLEMENT_ATTACH
 	// BIOC_Materials work
 
 	// Get a list of DLC Autoloads.
-	writeln(L"Finding DLC content in %s...", GetDLCsRoot().c_str());
+	logger.writeWideLineToLog(wstring_format(L"Finding DLC content in %s...", GetDLCsRoot().c_str()), true);
 
 	std::map<int, std::wstring> dlcMountOrder;
 
@@ -420,14 +435,14 @@ SPI_IMPLEMENT_ATTACH
 		auto fileIterator = std::filesystem::recursive_directory_iterator(tmpPath);
 		StringCchCat(tmpPath, MAX_PATH, L"\\Autoload.ini");
 
-		writeln(L"Found DLC Autoload.ini: %s, mount %i", tmpPath, autoload.first);
+		logger.writeWideLineToLog(wstring_format(L"Found DLC Autoload.ini: %s, mount %i", tmpPath, autoload.first), true);
 		GExtraAutoloadPaths.emplace_back(tmpPath);
 
 		for (const auto& entry : fileIterator)
 		{
 			if (entry.is_directory())
 			{
-				writeln(L"\tScanning %s", entry.path().c_str());
+				logger.writeWideLineToLog(wstring_format(L"\tScanning %s", entry.path().c_str()), true);
 				continue;
 			}
 
@@ -435,48 +450,51 @@ SPI_IMPLEMENT_ATTACH
 			auto extension = entry.path().extension();
 			if (extension == L".tfc") {
 				auto tfcPath = entry.path().c_str();
-				writeln(L"\t\tFound TFC: %s", tfcPath);
+				logger.writeWideLineToLog(wstring_format(L"\t\tFound TFC: %s", tfcPath), true);
 				DLCTFCsToRegister.push_back(new FString(_wcsdup(tfcPath))); // We have to wait until first registration attempt or we'll hit a null pointer
 			}
 			else if (extension == L".isb")
 			{
 				// Register ISB
 				auto isbPath = entry.path().c_str();
-				writeln(L"\t\tFound ISB: %s", isbPath);
-				ISBsToRegister.push_back(_wcsdup(isbPath)); // We have to wait until first registration attempt or we'll hit a null pointer
+				logger.writeWideLineToLog(wstring_format(L"\t\tFound ISB: %s", isbPath), true);
+				// ISBsToRegister.push_back(_wcsdup(isbPath)); // We have to wait until first registration attempt or we'll hit a null pointer
 			}
 		}
 	}
 	ContentScanComplete = true;
-	writeln(L"Completed DLC content detection");
+	logger.writeWideLineToLog(wstring_format(L"Completed DLC content detection"), true);
 
 	// Hook stuff that won't be needed until like 10-15 seconds into the game
 
-	#if !NDEBUG
+	if (nullptr != std::wcsstr(GetCommandLineW(), L" -debugautoload")) {
 		// Hook ProcessEvent for debugging.
 		INIT_FIND_PATTERN_POSTHOOK(ProcessEvent, LE_PATTERN_POSTHOOK_PROCESSEVENT);
 		INIT_HOOK_PATTERN(ProcessEvent);
-	#endif
+	}
 
-		// Find and hook the ProcessIni for Autoload.ini support
-		INIT_FIND_PATTERN_POSTHOOK(ProcessIni, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");
-		INIT_HOOK_PATTERN(ProcessIni);
+	// Find and hook the ProcessIni for Autoload.ini support
+	INIT_FIND_PATTERN_POSTHOOK(ProcessIni, /*"40 55 56 57 41*/ "54 41 55 41 56 41 57 48 8D AC 24 A0 EC FF FF B8 60 14 00 00");
+	INIT_HOOK_PATTERN(ProcessIni);
 
-		INIT_FIND_PATTERN_POSTHOOK(InstallDownloadableContent, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 98 fe ff ff 48 81 ec 40 02 00 00 48 c7 45 18 fe ff ff ff");
-		INIT_HOOK_PATTERN(InstallDownloadableContent);
+	INIT_FIND_PATTERN_POSTHOOK(InstallDownloadableContent, /*"48 8b c4 55 41*/ "54 41 55 41 56 41 57 48 8d a8 98 fe ff ff 48 81 ec 40 02 00 00 48 c7 45 18 fe ff ff ff");
+	INIT_HOOK_PATTERN(InstallDownloadableContent);
 
-		// OBJECT ROOTING FOR STARTUP FILE OBJECTS
-		// NOTE: THIS POINTS TO A FUNCTION FOLLOWING BY 0X10 AS THE FUNC IS TOO SMALL TO FIND BY SIGNATURE
-		INIT_FIND_PATTERN_POSTHOOK(RootObject, /*"40 55 48 8b ec*/"48 83 ec 50 48 c7 45 e0 fe ff ff ff 48 89 5c 24 60");
-		//writeln("RootObject currently at 0x%p", RootObject);
-		RootObject = (tUObjectRoot)((char*)RootObject - 0x10);
-		//writeln("Actual RootObject is at 0x%p", RootObject);
+	// OBJECT ROOTING FOR STARTUP FILE OBJECTS
+	// NOTE: THIS POINTS TO A FUNCTION FOLLOWING BY 0X10 AS THE FUNC IS TOO SMALL TO FIND BY SIGNATURE
+	INIT_FIND_PATTERN_POSTHOOK(RootObject, /*"40 55 48 8b ec*/"48 83 ec 50 48 c7 45 e0 fe ff ff ff 48 89 5c 24 60");
+	//writeln("RootObject currently at 0x%p", RootObject);
+	RootObject = (tUObjectRoot)((char*)RootObject - 0x10);
+	//writeln("Actual RootObject is at 0x%p", RootObject);
 
-		return true;
+	return true;
 }
 
 SPI_IMPLEMENT_DETACH
 {
-	closeLog();
+	if (!GIsRelease) {
+		Common::CloseConsole();
+	}
+	logger.close();
 	return true;
 }
