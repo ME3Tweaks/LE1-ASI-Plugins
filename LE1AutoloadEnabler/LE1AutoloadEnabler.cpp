@@ -208,7 +208,7 @@ void RegisterStartupFile(UPackage* package)
 			// Root the entire package
 			if (outerMost == package)
 			{
-				logger.writeWideLineToLog(wstring_format(L"  Rooting startup package object %hs", obj->GetFullName()), true);
+				logger.writeWideLineToLog(wstring_format(L"  Rooting: %hs", obj->GetFullName()), true);
 				RootObject(obj);
 			}
 
