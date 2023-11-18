@@ -88,7 +88,6 @@ void GetLE1DLCMountOrder(map<int, std::wstring>& dlcMountOrder, const TCHAR* dlc
 	// std::map<int, std::string> dlcFriendlyNames;
 	TCHAR enumeratePath[MAX_PATH];
 	WIN32_FIND_DATA fd;
-	TCHAR tmpPath[MAX_PATH];
 
 	StringCchCopy(enumeratePath, MAX_PATH, dlcPath);
 	StringCchCat(enumeratePath, MAX_PATH, L"*");
@@ -99,9 +98,8 @@ void GetLE1DLCMountOrder(map<int, std::wstring>& dlcMountOrder, const TCHAR* dlc
 		if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && wcslen(fd.cFileName) > 4
 			&& fd.cFileName[0] == L'D' && fd.cFileName[1] == L'L' && fd.cFileName[2] == L'C' && fd.cFileName[3] == L'_')
 		{
-			StringCchCopy(tmpPath, MAX_PATH, dlcPath);
-			StringCchCat(tmpPath, MAX_PATH, fd.cFileName);
-			StringCchCat(tmpPath, MAX_PATH, L"\\AutoLoad.ini");
+			wchar_t tmpPath[512];
+			swprintf_s(tmpPath, 512, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", fd.cFileName);
 			const auto fileAttributes = GetFileAttributes(tmpPath);
 			if (fileAttributes != INVALID_FILE_ATTRIBUTES)
 			{
@@ -428,15 +426,15 @@ SPI_IMPLEMENT_ATTACH
 	for (const auto& autoload : dlcMountOrder) // This has weird error 
 	{
 		TCHAR tmpPath[MAX_PATH];
+		TCHAR dlcPath[MAX_PATH];
 
 		// It's a DLC mod. LE only has a single autoload.ini (Bring Down The Sky) and it's not in the DLC folder
-		StringCchCopy(tmpPath, MAX_PATH, dlcRoot.c_str());
-		StringCchCat(tmpPath, MAX_PATH, autoload.second.c_str());
-		auto fileIterator = std::filesystem::recursive_directory_iterator(tmpPath);
-		StringCchCat(tmpPath, MAX_PATH, L"\\Autoload.ini");
-
+		swprintf_s(tmpPath, MAX_PATH, L"..\\..\\BioGame\\DLC\\%s\\AutoLoad.ini", autoload.second.c_str());
 		logger.writeWideLineToLog(wstring_format(L"Found DLC Autoload.ini: %s, mount %i", tmpPath, autoload.first), true);
 		GExtraAutoloadPaths.emplace_back(tmpPath);
+
+		swprintf_s(dlcPath, MAX_PATH, L"..\\..\\BioGame\\DLC\\%s", autoload.second.c_str());
+		auto fileIterator = std::filesystem::recursive_directory_iterator(dlcPath);
 
 		for (const auto& entry : fileIterator)
 		{
@@ -458,7 +456,7 @@ SPI_IMPLEMENT_ATTACH
 				// Register ISB
 				auto isbPath = entry.path().c_str();
 				logger.writeWideLineToLog(wstring_format(L"\t\tFound ISB: %s", isbPath), true);
-				// ISBsToRegister.push_back(_wcsdup(isbPath)); // We have to wait until first registration attempt or we'll hit a null pointer
+				ISBsToRegister.push_back(_wcsdup(isbPath)); // We have to wait until first registration attempt or we'll hit a null pointer
 			}
 		}
 	}
