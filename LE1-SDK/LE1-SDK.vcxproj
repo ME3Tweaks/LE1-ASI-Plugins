@@ -15,6 +15,7 @@
     <ClInclude Include="SdkInitializer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BaseMalloc.cpp" />
     <ClCompile Include="ForceBuild.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

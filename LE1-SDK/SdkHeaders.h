@@ -16,7 +16,7 @@
 #include <Windows.h>
 #include <cstdio>
 #include "SdkInitializer.h"
-
+#include "BaseMalloc.h"
 
 
 /*
@@ -259,6 +259,8 @@ struct FObjectImport : public FObjectResource
 	class ULinkerLoad* SourceLinker;
 	int SourceIndex;
 };
+
+#include "../../Shared-ASI/TMap.h" // Custom implementation needs added before we do the main .h files
 
 /*
 # ========================================================================================= #
