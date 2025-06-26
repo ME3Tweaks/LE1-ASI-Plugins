@@ -7,6 +7,7 @@
 #define GAMELE1
 
 #include "HookPrototypes.h"
+#include "ShaderResearch.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"5.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_PRELOAD;
@@ -82,7 +83,7 @@ void FErrorOutputDeviceLogf_hook(void* outputDevice, wchar_t* formatStr, void* p
 	logMessage(L"appErrorLogf", formatStr, param1, param2);
 }
 
-#pragma endrgion FErrorOutputDevice::Logf
+#pragma endregion FErrorOutputDevice::Logf
 
 
 
@@ -255,13 +256,16 @@ SPI_IMPLEMENT_ATTACH
 
 	writeln(L"Initializing DebugLogger...");
 	INIT_CHECK_SDK();
+	hookShaderResearch(InterfacePtr);
 
-	LoadCommonClassPointers(InterfacePtr);
+	//LoadCommonClassPointers(InterfacePtr);
 	// This is the argument used when looking up TLK strings it seems
 	//GStringManager = findAddressLeaMov(InterfacePtr, "GStringManager","48 8b 0d 4f 74 5a 01 4c 8b c7 e8 d7 3f fa ff 48 8b 5c 24 30 48 83 c4 20");
 
 	// Log debug output messages
 	INIT_HOOK_PATTERN(OutputDebugStringW);
+	hookLoggingFunctions(InterfacePtr);
+	return true;
 
 	// REVERSE ENGINEERING STUFF ----------------------------
 	// Log loading file to string

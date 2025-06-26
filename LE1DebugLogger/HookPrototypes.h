@@ -54,8 +54,8 @@ FPackageFileCache* GPackageFileCache = nullptr;
 struct FFileManager
 {
 	virtual void Unknown0() = 0;
-	virtual void Unknown1() = 0;
-	virtual void Unknown2() = 0;
+	virtual FArchive* CreateFileReader() = 0;
+	virtual FArchive* CreateFileWriter(wchar_t* filePath, int flags, void* outputDevice, unsigned long long maxArchiveSize) = 0;
 	virtual void Unknown3() = 0;
 	virtual void Unknown4() = 0;
 	virtual void Unknown5() = 0;
@@ -87,7 +87,11 @@ struct FFileManager
 	virtual WCHAR** GetLoadingFileName(void* something) = 0;
 };
 
-FFileManager* GFileManager = nullptr;
+
+// Output device, can be null I think?
+FArchive** GError;
+
+FFileManager** GFileManager = nullptr;
 
 // Used to load packages
 struct UnLinker
@@ -278,7 +282,7 @@ tGenerateName generateNameFromDisk = nullptr;
 tGenerateName generateNameFromDisk_orig = nullptr;
 
 // First parameter is actually an array of 2 integers
-typedef void* (*tGenerateName2)(unsigned int* param1, wchar_t* nameValue, int indexValue, BOOL parm4, BOOL parm5);
+typedef void* (*tGenerateName2)(FName* outName, wchar_t* nameValue, int indexValue, BOOL parm4, BOOL parm5);
 tGenerateName2 sfxNameConstructor = nullptr;
 tGenerateName2 sfxNameConstructor_orig = nullptr;
 
