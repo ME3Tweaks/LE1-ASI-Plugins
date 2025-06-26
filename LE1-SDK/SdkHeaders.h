@@ -17,7 +17,7 @@
 #include <cstdio>
 #include <string>
 #include "SdkInitializer.h"
-#include "BaseMalloc.h"
+#include "../../Shared-ASI/BaseMalloc.h"
 
 
 /*
@@ -43,6 +43,8 @@
 #undef lst15
 #undef lst16
 
+typedef UINT				UBOOL;
+typedef unsigned long       BITFIELD;
 /*
 # ========================================================================================= #
 # Structs
@@ -102,6 +104,50 @@ struct PackedIndex
 	DWORD Length : 9;   // Length of the AnsiName or WideName in symbols \wo null-terminator.
 	DWORD Bits : 3;     // Always 4 or 0. No idea wtf it really is, flags maybe?
 };
+
+// ===================
+// Ref Count Pointer
+// ===================
+// Wrapper for types that support Ref counting
+// In compiled code it is simply a pointer to the object.
+template<typename T>
+struct RefCountPointer {
+	T* Object; // Pointer to the object that is referenced
+
+	RefCountPointer() {}
+
+	RefCountPointer(T* InObject)
+		: Object(InObject) {
+	}
+
+	RefCountPointer& operator=(T* other)
+	{
+		// There's some reference counting going on here...
+		// Not sure we should mess with doing it
+		// If stuff really doesn't work, we can do that I guess.
+		Object = other;
+		return *this;
+	}
+
+	RefCountPointer& operator=(const RefCountPointer& other)
+	{
+		return *this = other.Object;
+	}
+
+};
+
+// ==============
+// TLinkedList
+// ==============
+template< class T > struct TLinkedList
+{
+public:
+	T CurrentItem;
+	TLinkedList* NextItem;
+	TLinkedList** PreviousItem;
+};
+
+
 
 // ----------------------------------------------------------------
 // FNameEntry bitmasks
