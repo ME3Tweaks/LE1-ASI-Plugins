@@ -9,8 +9,9 @@
 // Prints out ghidra addresses for construct functions for import
 #define PRINT_FOR_GHIDRA_CONSTRUCT FALSE
 // Prints out binding information
-#define PRINT_BINDING_INFO TRUE
-
+#define PRINT_BINDING_INFO !PRINT_FOR_GHIDRA_CONSTRUCT && TRUE // Set to false to fully disable this.
+// Prints out serialization info
+#define PRINT_SERIALIZATION_INFO !PRINT_FOR_GHIDRA_CONSTRUCT && TRUE // Set to false to fully disable this.
 
 
 // ===============================================================================================
@@ -26,13 +27,19 @@ typedef FArchive* (*tFShaderSerialize)(FShader*, FArchive*, void*, void*);
 typedef void (*tDeregisterShader)(FShaderType*, FShader*);
 typedef FArchive* (*tFShaderParameterSerialize)(FArchive*, void*);
 typedef FShader* (*tFShaderConstructFromCompiled)(FShader*, CompiledShaderData*, void*, void*);
-
+// For creating archive proxies
+typedef FArchiveProxy* (*tCreateArchiveProxy)(FArchiveProxy* self, FArchive* arcToProxy);
+typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
 
 // ===============================================================================================
 // Globals
 // ===============================================================================================
+// Until true, shader serialization will stall.
 bool AllHooksInstalled = false;
-bool IsRecording = false;
+// If we're recording binding names and offsets.
+bool IsRecordingBinding = false;
+// If we're mapping serialization offsets to the binding offsets.
+bool IsRecordingSerialization = false;
 
 // ===============================================================================================
 // HOOKING VARIABLES
@@ -50,8 +57,12 @@ tFShaderSerialize FShaderSerialize_orig = nullptr;
 tDeregisterShader DeregisterShader = nullptr;
 tFShaderParameterSerialize FShaderParameterSerialize = nullptr;
 tFShaderParameterSerialize FShaderParameterSerialize_orig = nullptr;
+tFShaderParameterSerialize FShaderResourceParameterSerialize = nullptr;
+tFShaderParameterSerialize FShaderResourceParameterSerialize_orig = nullptr;
 tFShaderConstructFromCompiled FShaderConstructFromCompiled = nullptr;
 tFShaderConstructFromCompiled FShaderConstructFromCompiled_orig = nullptr;
+tCreateArchiveProxy CreateArchiveProxy = nullptr;
+tSFXNameConstructor _CreateName = nullptr;
 
 
 // ===============================================================================================
@@ -61,6 +72,8 @@ tFShaderConstructFromCompiled FShaderConstructFromCompiled_orig = nullptr;
 void* MemoryArchiveReaderVTableStart = nullptr;
 void* MemoryArchiveWriterVTableStart = nullptr;
 void* FileReaderVTableStart = nullptr;
+void* StringArchiveProxyVTableStart = nullptr;
+
 void SetVTable(void** objectStartAddress, void* newVTableStartAddress) {
 	*objectStartAddress = newVTableStartAddress; // Set the vtable pointer to the new table
 }
@@ -70,7 +83,7 @@ void* GetVTable(void** objectStartAddress) {
 }
 
 // ===============================================================================================
-// CUSTOM OBJECTS
+// CUSTOM OBJECTS, UTILITY METHODS
 // ===============================================================================================
 // Type of the parameter that is bound/serialized.
 enum EShaderParameterType : int {
@@ -79,8 +92,22 @@ enum EShaderParameterType : int {
 	SPT_VertexFactory = 2
 };
 
+std::wstring GetParameterTypeString(EShaderParameterType type) {
+	switch(type) {
+		case SPT_Normal:
+			return L"Parameter";
+		case SPT_Resource:
+			return L"ResourceParameter";
+		case SPT_VertexFactory:
+			return L"VertexFactoryParameter";
+		default:
+			return L"Unknown";
+	}
+}
 
-
+void CreateName(FName* outName, const wchar_t* nameValue, int num = 0) {
+	_CreateName(outName, nameValue, num, TRUE, 0);
+}
 
 // ===============================================================================================
 // BINDING NAME RECORDING =======================================================================
@@ -94,8 +121,6 @@ FShader* DeserializedShader = nullptr;
 // The address we base relative addressing off, as the game
 // malloc'd it
 void* BaseShaderAddress = nullptr;
-// Types of shadsers we have recorded data for to filter out further recording
-std::set<const wchar_t*> recordedTypes;
 // A dummy uniform expression set that we only allocate once and feed into compiled
 // construtor. It doesn't have any data.
 FUniformExpressionSet DummySet{};
@@ -103,15 +128,32 @@ FUniformExpressionSet DummySet{};
 // Map
 //   ShaderType -> Map 
 //                    Offset -> Type, ParameterName
-std::map<std::wstring, std::map<DWORD, std::tuple<EShaderParameterType,std::wstring>>> bindingMap;
+std::map<std::wstring, std::map<DWORD, std::tuple<EShaderParameterType, std::wstring>>> bindingMap;
 
+// If we are binding the base parameters and not a substruct.
+bool IsSerializingBase = true;
 
 // BINDING METHODS AND HOOKS ===========
+void RecordBinding(DWORD offset, EShaderParameterType type, wchar_t* parameterName) {
+	auto shaderMap = bindingMap.find(DeserializedShader->Type->Name);
+	if (shaderMap != bindingMap.end()) {
+		shaderMap->second.emplace(std::make_pair(offset, std::make_tuple(SPT_Resource, parameterName)));
+	}
+	else {
+		// Uh oh.
+		std::cout << "Uh oh.\n";
+	}
+}
+
+
 void FShaderParameterBind_hook(void* varAddr, void* parameterMap, wchar_t* parameterName, BOOL isOptional) {
 	auto offset = (long long)varAddr - (long long)BaseShaderAddress;
 	if (PRINT_BINDING_INFO) {
 		std::wcout << RecordingPrefix.c_str() << L"FShaderParameter " << parameterName << L" @ " << std::hex << offset << std::endl;
 	}
+
+	RecordBinding(offset, SPT_Normal, parameterName);
+
 	// FShaderResourceParameterBind_orig(varAddr, parameterMap, parameterName, TRUE); // true suppresses messages
 }
 
@@ -121,6 +163,7 @@ void FShaderResourceParameterBind_hook(void* varAddr, void* parameterMap, wchar_
 		std::wcout << RecordingPrefix.c_str() << L"FShaderResourceParameter " << parameterName << L" @ " << std::hex << offset << std::endl;
 	}
 
+	RecordBinding(offset, SPT_Resource, parameterName);
 	// FShaderResourceParameterBind_orig(varAddr, parameterMap, parameterName, TRUE); // true suppresses messages
 }
 
@@ -130,7 +173,7 @@ const std::wstring FSceneTextureShaderParametersPrefix = L"[FSceneTextureShaderP
 tSubStructBind FSceneTextureShaderParametersBind = nullptr;
 tSubStructBind FSceneTextureShaderParametersBind_orig = nullptr;
 void FSceneTextureShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FSceneTextureShaderParametersPrefix);
 		FSceneTextureShaderParametersBind_orig(Ar, Map);
@@ -146,7 +189,7 @@ const std::wstring FLightShaftPixelShaderParametersPrefix = L"[FLightShaftPixelS
 tSubStructBind FLightShaftPixelShaderParametersBind = nullptr;
 tSubStructBind FLightShaftPixelShaderParametersBind_orig = nullptr;
 void FLightShaftPixelShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FLightShaftPixelShaderParametersPrefix);
 		FLightShaftPixelShaderParametersBind_orig(Ar, Map);
@@ -162,7 +205,7 @@ const std::wstring FDOFShaderParametersPrefix = L"[FDOFShaderParameters]";
 tSubStructBind FDOFShaderParametersBind = nullptr;
 tSubStructBind FDOFShaderParametersBind_orig = nullptr;
 void FDOFShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FDOFShaderParametersPrefix);
 		FDOFShaderParametersBind_orig(Ar, Map);
@@ -178,7 +221,7 @@ const std::wstring FMaterialPixelShaderParametersPrefix = L"[FMaterialPixelShade
 tSubStruct3Bind FMaterialPixelShaderParametersBind = nullptr;
 tSubStruct3Bind FMaterialPixelShaderParametersBind_orig = nullptr;
 void FMaterialPixelShaderParametersBind_hook(FArchive* Ar, void* unk2, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FMaterialPixelShaderParametersPrefix);
 		FMaterialPixelShaderParametersBind_orig(Ar, unk2, Map);
@@ -194,7 +237,7 @@ const std::wstring FSpotLightPolicy_ModShadowPixelParamsTypePrefix = L"[FSpotLig
 tSubStructBind FSpotLightPolicy_ModShadowPixelParamsTypeBind = nullptr;
 tSubStructBind FSpotLightPolicy_ModShadowPixelParamsTypeBind_orig = nullptr;
 void FSpotLightPolicy_ModShadowPixelParamsTypeBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FSpotLightPolicy_ModShadowPixelParamsTypePrefix);
 		FSpotLightPolicy_ModShadowPixelParamsTypeBind_orig(Ar, Map);
@@ -210,7 +253,7 @@ const std::wstring FAmbientOcclusionParamsPrefix = L"[FAmbientOcclusionParams]";
 tSubStructBind FAmbientOcclusionParamsBind = nullptr;
 tSubStructBind FAmbientOcclusionParamsBind_orig = nullptr;
 void FAmbientOcclusionParamsBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FAmbientOcclusionParamsPrefix);
 		FAmbientOcclusionParamsBind_orig(Ar, Map);
@@ -225,8 +268,8 @@ void FAmbientOcclusionParamsBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
 const std::wstring FMaterialBaseShaderParametersPrefix = L"[FMaterialBaseShaderParameters]";
 tSubStruct3Bind FMaterialBaseShaderParametersBind = nullptr;
 tSubStruct3Bind FMaterialBaseShaderParametersBind_orig = nullptr;
-void FMaterialBaseShaderParametersBind_hook(FArchive* Ar, void* parm2,  FShaderParameterMap* Map) {
-	if (IsRecording) {
+void FMaterialBaseShaderParametersBind_hook(FArchive* Ar, void* parm2, FShaderParameterMap* Map) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FMaterialBaseShaderParametersPrefix);
 		FMaterialBaseShaderParametersBind_orig(Ar, parm2, Map);
@@ -242,7 +285,7 @@ const std::wstring FFogVolumeVertexShaderParametersPrefix = L"[FFogVolumeVertexS
 tSubStructBind FFogVolumeVertexShaderParametersBind = nullptr;
 tSubStructBind FFogVolumeVertexShaderParametersBind_orig = nullptr;
 void FFogVolumeVertexShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FFogVolumeVertexShaderParametersPrefix);
 		FFogVolumeVertexShaderParametersBind_orig(Ar, Map);
@@ -258,7 +301,7 @@ const std::wstring FHeightFogVertexShaderParametersPrefix = L"[FHeightFogVertexS
 tSubStructBind FHeightFogVertexShaderParametersBind = nullptr;
 tSubStructBind FHeightFogVertexShaderParametersBind_orig = nullptr;
 void FHeightFogVertexShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FHeightFogVertexShaderParametersPrefix);
 		FHeightFogVertexShaderParametersBind_orig(Ar, Map);
@@ -274,7 +317,7 @@ const std::wstring FDirectionalLightPolicyPixelParametersPrefix = L"[FDirectiona
 tSubStructBind FDirectionalLightPolicyPixelParametersBind = nullptr;
 tSubStructBind FDirectionalLightPolicyPixelParametersBind_orig = nullptr;
 void FDirectionalLightPolicyPixelParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FDirectionalLightPolicyPixelParametersPrefix);
 		FDirectionalLightPolicyPixelParametersBind_orig(Ar, Map);
@@ -290,7 +333,7 @@ const std::wstring FHBAOShaderParametersPrefix = L"[FHBAOShaderParameters]";
 tSubStructBind FHBAOShaderParametersBind = nullptr;
 tSubStructBind FHBAOShaderParametersBind_orig = nullptr;
 void FHBAOShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FHBAOShaderParametersPrefix);
 		FHBAOShaderParametersBind_orig(Ar, Map);
@@ -306,7 +349,7 @@ const std::wstring FGammaShaderParametersPrefix = L"[FGammaShaderParameters]";
 tSubStructBind FGammaShaderParametersBind = nullptr;
 tSubStructBind FGammaShaderParametersBind_orig = nullptr;
 void FGammaShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FGammaShaderParametersPrefix);
 		FGammaShaderParametersBind_orig(Ar, Map);
@@ -322,7 +365,7 @@ const std::wstring FColorRemapShaderParametersPrefix = L"[FColorRemapShaderParam
 tSubStructBind FColorRemapShaderParametersBind = nullptr;
 tSubStructBind FColorRemapShaderParametersBind_orig = nullptr;
 void FColorRemapShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map) {
-	if (IsRecording) {
+	if (IsRecordingBinding) {
 		auto originalPrefix = RecordingPrefix;
 		RecordingPrefix = RecordingPrefix.append(FColorRemapShaderParametersPrefix);
 		FColorRemapShaderParametersBind_orig(Ar, Map);
@@ -333,25 +376,86 @@ void FColorRemapShaderParametersBind_hook(FArchive* Ar, FShaderParameterMap* Map
 	}
 }
 
+FShader* FShaderConstructFromCompiled_hook(FShader* inShader, CompiledShaderData* compiledInfo, void* unk3, void* unk4)
+{
+	// This method normally sets up a freshly malloc'd shader object (inShader) from the compiledInfo object.
+	// We don't care about any of that.
+	if (IsRecordingBinding) {
+		// Record the address of the passed in shader object, as all operations are relative to this address.
+		BaseShaderAddress = inShader;
+		return inShader;
+	}
+	else
+	{
+		return FShaderConstructFromCompiled_orig(inShader, compiledInfo, unk3, unk4);
+	}
+}
+
+// ===============================================================================================
+// SERIALIZATION RECORDING =======================================================================
+// ===============================================================================================
+
+// The offset in which we base our serialialization offsets from.
+DWORD ParametersStartOffset = 0;
+
+void PrintSerialization(FArchive* ar, EShaderParameterType type) {
+	auto offset = ar->VTable->Tell(ar) - ParametersStartOffset + 0x84; // FShader serialiation is 0x84 in length so we have to adjust this
+	auto mapPair = bindingMap.find(DeserializedShader->Type->Name);
+	if (mapPair != bindingMap.end()) {
+		auto map = mapPair->second;
+		auto offsetInfo = map.find(offset);
+		if (offsetInfo == map.end()) {
+			// Not found!
+			std::wcout << L" << " << GetParameterTypeString(type) <<   L" NOT MAPPED  " << std::hex << offset << std::endl;
+		}
+		else {
+			auto [paramType, name] = offsetInfo->second;
+			std::wcout << L"  << " << GetParameterTypeString(type) << L"  " << name.c_str() << L"  " << std::hex << offset << std::endl;
+		}
+	}
+}
+
+FArchive* FShaderParameterSerialize_hook(FArchive* ar, void* param) {
+	if (IsRecordingSerialization && PRINT_SERIALIZATION_INFO) {
+		PrintSerialization(ar, SPT_Normal);
+	}
+	return FShaderParameterSerialize_orig(ar, param);
+}
+
+FArchive* FShaderResourceParameterSerialize_hook(FArchive* ar, void* param) {
+	if (IsRecordingSerialization && PRINT_SERIALIZATION_INFO) {
+		PrintSerialization(ar, SPT_Resource);
+	}
+	return FShaderParameterSerialize_orig(ar, param);
+}
+
+
+
+
+// ================================================================================================
+// SHARED CODE
+// =================================================================================================
+
 FArchive* FShaderSerialize_hook(FShader* shader, FArchiveFileReader* ar, void* unk3, void* unk4) {
-	IsRecording = false;
+	IsRecordingBinding = false;
+	IsRecordingSerialization = false;
 
 	while (AllHooksInstalled == false) {
+		// Stall for hooks to install
 		std::cout << "Waiting for hooks to install...\n";
 		std::this_thread::sleep_for(200ms);
 	}
 
-	auto res = FShaderSerialize_orig(shader, ar, unk3, unk4);
+	auto result = FShaderSerialize_orig(shader, ar, unk3, unk4);
+	auto neverSeenShader = bindingMap.find(shader->Type->Name) == bindingMap.end();
 
-	// This is at the end of the original shader serialization func;
-	// we should not be at the position where we read the parameters
-	auto pos = ar->VTable->Tell(ar);
-
-	if (recordedTypes.find(shader->Type->Name) == recordedTypes.end()) {
+	// Binding recording.
+	if (neverSeenShader) {
+		// We haven't seen this shader type yet.
+		IsRecordingBinding = true;
 		if (PRINT_BINDING_INFO) {
 			std::wcout << shader->Type->Name << std::endl;
 		}
-		IsRecording = true;
 
 		// Assign this here, we will access it later in the hooks
 		DeserializedShader = shader;
@@ -360,6 +464,11 @@ FArchive* FShaderSerialize_hook(FShader* shader, FArchiveFileReader* ar, void* u
 		// We do a fake construct from compiled call, as we have hooked the bind methods.
 		// We then record the calls to bind, calculating the offset from the address we record when
 		// ConstructFromCompiled is called and the FShader is malloc'd.
+
+		// Create the empty binding list
+		std::wstring name = shader->Type->Name;
+		auto map = std::map<DWORD, std::tuple<EShaderParameterType, std::wstring>>();
+		bindingMap.emplace(name, map);
 
 		VertexCompiledShaderData compiledInfo{};
 		FShaderParameterMap parameterMap{}; // empty parameter map. Don't care about uniform expressions.
@@ -376,64 +485,33 @@ FArchive* FShaderSerialize_hook(FShader* shader, FArchiveFileReader* ar, void* u
 
 		if (PRINT_FOR_GHIDRA_CONSTRUCT) {
 			// For printing out a table you can import with ghidra's ImportSymbols script. It doesn't do namespaces though.
-			auto funcAddr = *(shader->Type->ConstructCompiledRef);
-			std::wcout << shader->Type->Name << L"::ConstructFromCompiled 0x" << std::hex << funcAddr << L" f" << std::endl;
+			auto funcAddr = *(shader->Type->ConstructSerializedRef);
+			std::wcout << shader->Type->Name << L"::ConstructFromSerialized 0x" << std::hex << funcAddr << L" f" << std::endl;
 		}
-		else 
+		else
 		{
 			// This will invoke the ::Bind hooks
 			shader->Type->ConstructCompiledRef((CompiledShaderData*)&compiledInfo, &unk2, &unk3, &unk4);
 		}
-		recordedTypes.insert(shader->Type->Name);
 	}
-	IsRecording = false;
-	return res;
+
+	// Serialization recording.
+	if (neverSeenShader) {
+		// We should now have set up the binding map that will let us map serialization order.
+		// We do not set this to false on exit, only on entry, as we want to record the serialization that occurs
+		// after this base method is called (the one we have hooked here).
+		IsRecordingSerialization = true;
+
+		// The archive is at the end of the original shader base serialization func;
+		// we should now be at the position where we read the parameters
+		ParametersStartOffset = ar->VTable->Tell(ar);
+	}
+
+
+	IsRecordingBinding = false;
+	return result;
 }
 
-
-// ===============================================================================================
-// SERIALIZATION RECORDING =======================================================================
-// ===============================================================================================
-
-INT basePosition = 0;
-
-FArchive* FShaderParameterSerialize_hook(FArchive* ar, void* param) {
-	if (IsRecording) {
-		auto offset = ar->VTable->Tell(ar) - basePosition;
-		// std::cout << "  Serialize parameter at " << std::hex << offset << std::endl;
-	}
-	return FShaderParameterSerialize_orig(ar, param);
-}
-
-FShader* FShaderConstructFromCompiled_hook(FShader* inShader, CompiledShaderData* compiledInfo, void* unk3, void* unk4)
-{
-	// This method normally sets up a freshly malloc'd shader object from the compiledInfo object.
-	if (IsRecording) {
-		// We don't care about the malloc'd shader. Use the one we already have set up.
-		*inShader = *DeserializedShader;
-		BaseShaderAddress = inShader;
-		return inShader;
-	}
-	else
-	{
-		return FShaderConstructFromCompiled_orig(inShader, compiledInfo, unk3, unk4);
-	}
-}
-
-
-
-typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
-tSFXNameConstructor _CreateName = nullptr;
-void CreateName(FName* outName, const wchar_t* nameValue, int num = 0) {
-	_CreateName(outName, nameValue, num, TRUE, 0);
-}
-
-// For creating archive proxies
-typedef FArchiveProxy* (*tCreateArchiveProxy)(FArchiveProxy* self, FArchive* arcToProxy);
-tCreateArchiveProxy CreateArchiveProxy = nullptr;
-
-// Set to FArchiveProxy vtable
-void* StringArchiveProxyVTableStart = nullptr;
 
 
 // ================================================================================================
@@ -450,8 +528,12 @@ bool hookShaderResearch(ISharedProxyInterface* InterfacePtr) {
 
 	DeregisterShader = (tDeregisterShader)SDKInitializer::Instance()->GetAbsoluteAddress(0x24e2c0); // LE1
 
-	FShaderParameterSerialize = (tFShaderParameterSerialize)SDKInitializer::Instance()->GetAbsoluteAddress(0x249230); // LE1
+	FShaderParameterSerialize = (tFShaderParameterSerialize)SDKInitializer::Instance()->GetAbsoluteAddress(0x2491b0); // LE1
 	InterfacePtr->InstallHook("FShaderParameterSerialize", FShaderParameterSerialize, FShaderParameterSerialize_hook, (void**)&FShaderParameterSerialize_orig);
+
+	FShaderResourceParameterSerialize = (tFShaderParameterSerialize)SDKInitializer::Instance()->GetAbsoluteAddress(0x249230); // LE1
+	InterfacePtr->InstallHook("FShaderResourceParameterSerialize", FShaderResourceParameterSerialize, FShaderResourceParameterSerialize_hook, (void**)&FShaderResourceParameterSerialize_orig);
+
 
 	FSceneTextureShaderParametersBind = (tSubStructBind)SDKInitializer::Instance()->GetAbsoluteAddress(0x774380); // LE1
 	InterfacePtr->InstallHook("FSceneTextureShaderParametersBind", FSceneTextureShaderParametersBind, FSceneTextureShaderParametersBind_hook, (void**)&FSceneTextureShaderParametersBind_orig);
@@ -525,6 +607,8 @@ bool hookShaderResearch(ISharedProxyInterface* InterfacePtr) {
 
 
 	// OLD CODE ===================
+	// Not used but left as an exercise to the reader.
+	
 	// Get a vertex factory as it seems necessary...
 	auto vertexFactoryTypeListPointer = GetVertexFactoryTypeList();
 	auto shaderTypeListPointer = GetShaderTypeList();
