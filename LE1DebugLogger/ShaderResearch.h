@@ -3,6 +3,7 @@
 #include <thread>
 #include <set>
 #include <map>
+#include "../../Shared-ASI/Interface.h"
 
 // This file self contains shader binding research code.
 
@@ -31,6 +32,8 @@ typedef FShader* (*tFShaderConstructFromCompiled)(FShader*, CompiledShaderData*,
 // For creating archive proxies
 typedef FArchiveProxy* (*tCreateArchiveProxy)(FArchiveProxy* self, FArchive* arcToProxy);
 typedef void (*tSFXNameConstructor)(FName* outValue, const wchar_t* nameValue, int nameNumber, BOOL createIfNotFoundMaybe, BOOL unk2);
+typedef void (*tShaderSerialize)(FShader*, FArchive*);
+typedef void (*tSerializeGlobalShaders)(EShaderPlatform, FArchive*);
 
 // ===============================================================================================
 // Globals
@@ -68,7 +71,8 @@ tFShaderConstructFromCompiled FShaderConstructFromCompiled = nullptr;
 tFShaderConstructFromCompiled FShaderConstructFromCompiled_orig = nullptr;
 tCreateArchiveProxy CreateArchiveProxy = nullptr;
 tSFXNameConstructor _CreateName = nullptr;
-
+tSerializeGlobalShaders SerializeGlobalShaders = nullptr;
+tSerializeGlobalShaders SerializeGlobalShaders_orig = nullptr;
 
 // ===============================================================================================
 // VTables
@@ -128,7 +132,7 @@ std::wstring RecordingPrefix(L"  ");
 FShader* DeserializedShader = nullptr;
 // The address we base relative addressing off, as the game
 // malloc'd it
-void* BaseShaderAddress = nullptr;
+void* BindingBaseShaderAddress = nullptr;
 // A dummy uniform expression set that we only allocate once and feed into compiled
 // construtor. It doesn't have any data.
 FUniformExpressionSet DummySet{};
@@ -143,11 +147,13 @@ std::map<std::wstring, DWORD> structSizeMap;
 
 bool IsRecordingSubStructSize = false;
 DWORD NumBoundParametersInStruct = 0;
+// Used for tripping breakpoints
+bool breakPoint = false;
 
 // BINDING METHODS AND HOOKS =================
 void RecordBinding(void* varAddr, EShaderParameterType type, std::wstring parameterName) {
 	if (IsRecordingBinding) {
-		auto offset = (long long)varAddr - (long long)BaseShaderAddress;
+		auto offset = (long long)varAddr - (long long)BindingBaseShaderAddress;
 
 		if (IsRecordingSubStructSize)
 		{
@@ -355,8 +361,8 @@ FShader* FShaderConstructFromCompiled_hook(FShader* inShader, CompiledShaderData
 	// This method normally sets up a freshly malloc'd shader object (inShader) from the compiledInfo object.
 	// We don't care about any of that.
 	if (IsRecordingBinding) {
-		// Record the address of the passed in shader object, as all operations are relative to this address.
-		BaseShaderAddress = inShader;
+		// Record the address of the passed in shader object, as all binding operations are relative to this address.
+		BindingBaseShaderAddress = inShader;
 		return inShader;
 	}
 	else
@@ -371,15 +377,24 @@ FShader* FShaderConstructFromCompiled_hook(FShader* inShader, CompiledShaderData
 
 // Global ==================
 // The archive offset in which we base our file serialialization offsets from.
-DWORD ParametersStartOffset = 0;
+DWORD SerializationBaseOffset = 0;
 // Used to skip printing out substruct serializations
 DWORD SkipUntilOffset = 0;
 // If we are binding the base parameters and not a substruct.
 bool IsSerializingBase = true;
+// Map of shader names to their serialization functions.
+// Original VTable -> Serialization func. We can't trust the vtable offset to serialize, as the serialize function is hooked and will have changed.
+std::map<void*, tShaderSerialize> SerializationFunctionMap;
+// ShaderType Name-> OriginalSerializationFunction
+// Note the detour function is all the same so we don't really care.
+//std::map<std::wstring, tShaderSerialize> SerializationFunctionMap;
 
 // Functions ===============
 void PrintSerialization(DWORD ArOffset, EShaderParameterType type, void* paramAddr) {
-	auto serializationOffset = ArOffset - ParametersStartOffset + 0x84; // FShader serialiation is 0x84 in length so we have to adjust this
+	auto serializationOffset = ArOffset - SerializationBaseOffset; 
+	if (serializationOffset < 0) {
+		std::cout <<  "ya done goofd\n";
+	}
 	if (SkipUntilOffset > serializationOffset) {
 		return;
 	}
@@ -390,7 +405,10 @@ void PrintSerialization(DWORD ArOffset, EShaderParameterType type, void* paramAd
 	auto mapPair = bindingMap.find(DeserializedShader->Type->Name);
 	if (mapPair != bindingMap.end()) {
 		auto map = mapPair->second;
-		DWORD paramOffset = (long long)paramAddr - (long long)BaseShaderAddress;
+		DWORD paramOffset = (long long)paramAddr - (long long)DeserializedShader; // Compute from the address of the shader object
+		if ((int)paramOffset < 0) {
+			std::cout << "ya done goofd again\n";
+		}
 		auto bindingOffsetInfo = map.find(paramOffset);
 		if (bindingOffsetInfo == map.end()) {
 			// Not bound or vertex factory params (haven't figured those out yet.)
@@ -462,95 +480,226 @@ FArchive* FVertexFactoryParameterRefSerialize_hook(FArchive* ar, FVertexFactoryP
 // SHARED CODE
 // =================================================================================================
 
-FArchive* FShaderSerialize_hook(FShader* shader, FArchiveFileReader* ar, void* unk3, void* unk4) {
+// Invokes the original serialization code for an FShader.
+void InvokeOriginalShaderSerialization(FShader* shader, FArchive* ar) {
+	auto vtable = GetVTable((void**)shader);
+	auto originalFunc = SerializationFunctionMap.find(vtable);
+	if (originalFunc != SerializationFunctionMap.end()) {
+		// Invoke the original serialization function
+		originalFunc->second(shader, ar);
+	}
+	else {
+		std::cout << "Serious uh ohs have occurred.\n";
+	}
+}
+
+// This marks the start of the serialization of an FShader.
+void CombinedShaderSerialize_hook(FShader* shader, FArchive* ar) {
+	// Record the shader object and serialization start.
+	DeserializedShader = shader;
+	SerializationBaseOffset = ar->VTable->Tell(ar);
+
+	// Reset variables.
 	IsRecordingBinding = false;
 	IsRecordingSerialization = false;
 
-	while (AllHooksInstalled == false) {
-		// Stall for hooks to install
-		std::cout << "Waiting for hooks to install...\n";
-		std::this_thread::sleep_for(200ms);
+	// For us to get the type, we unforutnately have to serialize the shader, cause even though the calling func could have
+	// set it, it didn't.
+	InvokeOriginalShaderSerialization(shader, ar);
+	auto shaderType = shader->Type;
+	DeregisterShader(shaderType, shader); // Get rid of it
+
+	// Rewind
+	ar->VTable->Seek(ar, SerializationBaseOffset);
+
+
+	auto neverSeenShader = bindingMap.find(shader->Type->Name) == bindingMap.end();
+	if (!neverSeenShader) {
+		// We've seen this shader type, just serialize it.
+		InvokeOriginalShaderSerialization(shader, ar);
+		return;
 	}
 
-	auto result = FShaderSerialize_orig(shader, ar, unk3, unk4);
-	auto neverSeenShader = bindingMap.find(shader->Type->Name) == bindingMap.end();
+	// Encountered a new shader type
+
 
 	// Binding recording.
-	if (neverSeenShader) {
-		// We haven't seen this shader type yet.
-		IsRecordingBinding = true;
-		IsRecordingBaseBinding = true;
+	IsRecordingBinding = true;
+	IsRecordingBaseBinding = true;
 
-		if (PRINT_BINDING_INFO) {
-			std::wcout << shader->Type->Name << std::endl;
-		}
+	if (PRINT_BINDING_INFO) {
+		std::wcout << shader->Type->Name << std::endl;
+	}
 
-		// Assign this here, we will access it later in the hooks
-		DeserializedShader = shader;
+	// Assign this here, we will access it later in the hooks
+	DeserializedShader = shader;
 
-		// Step 1: Find the bind points for the shader.
-		// We do a fake construct from compiled call, as we have hooked the bind methods.
-		// We then record the calls to bind, calculating the offset from the address we record when
-		// ConstructFromCompiled is called and the FShader is malloc'd.
+	// Step 1: Find the bind points for the shader.
+	// We do a fake construct from compiled call, as we have hooked the bind methods.
+	// We then record the calls to bind, calculating the offset from the address we record when
+	// ConstructFromCompiled is called and the FShader is malloc'd.
 
-		// Create the empty binding list
-		std::wstring name = shader->Type->Name;
-		auto map = std::map<DWORD, std::tuple<EShaderParameterType, std::wstring>>();
-		bindingMap.emplace(name, map);
+	// Create the empty binding list
+	std::wstring name = shader->Type->Name;
+	auto map = std::map<DWORD, std::tuple<EShaderParameterType, std::wstring>>();
+	bindingMap.emplace(name, map);
 
-		VertexCompiledShaderData compiledInfo{};
-		FShaderParameterMap parameterMap{}; // empty parameter map. Don't care about uniform expressions.
-		// Just kidding. A few shaders need it for who knows why.
-		parameterMap.UniformExpressionSet = &DummySet;
-		compiledInfo.ParameterMap = &parameterMap;
-		if (shader->Target.Frequency == SF_VERTEX) {
-			// Vertex shaders need a vertex factory, not sure if it matters which one.
-			// Don't know if we need to properly enumerate these...........
-			compiledInfo.VertexFactoryType = (*GetVertexFactoryTypeList())->CurrentItem;
-		}
-		int unk2 = 0;
-		int unk3 = 0;
-		int unk4 = 0;
+	VertexCompiledShaderData compiledInfo{};
+	FShaderParameterMap parameterMap{}; // empty parameter map. Don't care about uniform expressions.
+	// Just kidding. A few shaders need it for who knows why.
+	parameterMap.UniformExpressionSet = &DummySet;
+	compiledInfo.ParameterMap = &parameterMap;
+	if (shader->Target.Frequency == SF_VERTEX) {
+		// Vertex shaders need a vertex factory, not sure if it matters which one.
+		// Don't know if we need to properly enumerate these...........
+		compiledInfo.VertexFactoryType = (*GetVertexFactoryTypeList())->CurrentItem;
+	}
+	int unk2 = 0;
+	int unk3 = 0;
+	int unk4 = 0;
 
-		if (PRINT_FOR_GHIDRA) {
-			void* vtable = GetVTable((void**)shader);
-			void** serializeFunc = (void**)((long long)vtable + (0x8 * sizeof(void*)));
+	if (PRINT_FOR_GHIDRA) {
+		void* vtable = GetVTable((void**)shader);
+		void** serializeFunc = (void**)((long long)vtable + (0x8 * sizeof(void*)));
 
-			// For printing out a table you can import with ghidra's ImportSymbols script. It doesn't do namespaces though.
-			auto funcAddr = *(serializeFunc);
-			std::wcout << shader->Type->Name << L"::Serialize 0x" << std::hex << funcAddr << L" f" << std::endl;
-		}
-		else
-		{
-			// This will invoke the ::Bind hooks
-			shader->Type->ConstructCompiledRef((CompiledShaderData*)&compiledInfo, &unk2, &unk3, &unk4);
-		}
+		// For printing out a table you can import with ghidra's ImportSymbols script. It doesn't do namespaces though.
+		auto funcAddr = *(serializeFunc);
+		std::wcout << shader->Type->Name << L"::Serialize 0x" << std::hex << funcAddr << L" f" << std::endl;
+	}
+	else
+	{
+		// This will invoke the ::Bind hooks
+		shader->Type->ConstructCompiledRef((CompiledShaderData*)&compiledInfo, &unk2, &unk3, &unk4);
 	}
 
 	// Serialization recording.
-	if (neverSeenShader) {
-		// We should now have set up the binding map that will let us map serialization order.
-		// We do not set this to false on exit, only on entry, as we want to record the serialization that occurs
-		// after this base method is called (the one we have hooked here).
-		IsRecordingSerialization = true;
+	// STEP 2:
+	// We should now have set up the binding map that will let us map serialization order.
+	// We do not set this to false on exit, only on entry, as we want to record the serialization that occurs
+	// in this function.
+	IsRecordingSerialization = true;
 
-		// We now use this as our base shader adddress as we are going back to the archive for serialization.
-		BaseShaderAddress = shader;
+	// We now use this as our base shader adddress as we are going back to the archive for serialization.
+	DeserializedShader = shader; // reset this back.
 
-		// The archive is at the end of the original shader base serialization func;
-		// we should now be at the position where we read the parameters
-		ParametersStartOffset = ar->VTable->Tell(ar);
-
-		// Ensure we have reset this if hte last paramter type was a struct.
-		SkipUntilOffset = 0;
-	}
+	// Begin serialization, this will record the parameter serialization calls
+	InvokeOriginalShaderSerialization(shader, ar);
 
 
+	// Ensure we have reset this if the last paramter type was a struct.
+	SkipUntilOffset = 0;
+
+	// We are no longer recording bindings.
 	IsRecordingBinding = false;
-	return result;
+	// We also are no longer recording serializations.
+	IsRecordingSerialization = false;
 }
 
+std::wstring SMToString(EShaderPlatform platform) {
+	switch (platform) {
+	case SP_360:
+		return L"Xbox 360";
+	case SP_PS3:
+		return L"PS3";
+	case SP_SM2: return L"PC SM2";
+	case SP_SM3: return L"PC SM3";
+	case SP_SM4: return L"PC SM4";
+	case SP_SM5: return L"PC SM5";
+	case SP_Dingo:
+		return L"Xbox One";
+	case SP_Orbis:
+		return L"PS4";
+	default:
+		return L"Unknown";
+	}
+}
 
+void HookShaderSerialize(void* vtable) {
+	void** serializeFunc = (void**)((long long)vtable + (0x8 * sizeof(void*)));
+	tShaderSerialize originalFun = (tShaderSerialize)*serializeFunc;
+
+	// Write the hook
+	DWORD flOldProtect = 0u;
+
+	// Allow us to write to the vtable entry
+	VirtualProtect(serializeFunc, sizeof(tShaderSerialize), PAGE_READWRITE, &flOldProtect);
+
+	// Do your stuff
+	*serializeFunc = (void*)CombinedShaderSerialize_hook;
+
+	// Restore it
+	VirtualProtect(serializeFunc, sizeof(tShaderSerialize), flOldProtect, &flOldProtect);
+
+	// Record the original function so we can invoke it later
+	SerializationFunctionMap.emplace(vtable, originalFun);
+}
+
+void hookAllShaderSerializationMethods() {
+	int numDone = 0;
+	//std::cout << "Hooking shader serialization methods...\n";
+
+	auto shaderTypeListPtr = GetShaderTypeList();
+	auto shaderTypeList = *shaderTypeListPtr;
+	auto numToDo = shaderTypeList->Count();
+	while (shaderTypeList != nullptr) {
+		std::cout << "\rHooking shader serialization methods " << numDone << "/" << numToDo;
+
+		auto shaderName = ws2s(shaderTypeList->CurrentItem->Name);
+		shaderName.append("_Hook");
+
+		// Construct a type of the shader; so we can get its vtable
+		FShader* temp = shaderTypeList->CurrentItem->ConstructSerializedRef(shaderTypeList->CurrentItem);
+		//if (temp->Target.Platform != SP_SM5) {
+		//	// GlobalShaderCache is weird and has a bunch of shaders that aren't for SM5
+		//	// No clue why they're there. they can't be used.
+		//	std::wcout << L"Skipping non SM5 shader type " << shaderTypeList->CurrentItem->Name << L", it's for " << SMToString((EShaderPlatform)temp->Target.Platform) << std::endl;
+		//	shaderTypeList = shaderTypeList->NextItem;
+		//	numDone++;
+		//	continue;
+		//}
+
+		auto vtable = GetVTable((void**)temp);
+		HookShaderSerialize(vtable);
+		/*
+		void** serializationPtr = (void**)((long long)vtable + (0x8 * sizeof(void*))); // LE1 - 0x8 into VTable is Serialize()
+		void* serializationFunc = *serializationPtr;
+
+
+		// Hook the serialization method
+		tShaderSerialize originalFunc = nullptr;
+		auto hookResult = ISharedProxyInterface::SPIInterfacePtr->InstallHook(shaderName.c_str(), serializationFunc, CombinedShaderSerialize_hook, (void**)&originalFunc);
+		if (hookResult != SPIReturn::Success)
+		{
+			std::cout << "Failed to hook " << shaderName << " @ " << std::hex << serializationFunc << ": " << SPIReturnToString(hookResult) << std::endl;
+		}
+
+		// Record the original serialization function
+		SerializationFunctionMap.emplace(vtable, originalFunc);
+		*/
+		shaderTypeList = shaderTypeList->NextItem;
+		numDone++;
+	}
+	std::cout << std::endl;
+}
+
+void SerializeGlobalShaders_hook(EShaderPlatform platform, FArchive* Ar) {
+	std::cout << "Installing hooks...\n";
+
+	// This method is only ever called once VERY early in game boot
+	while (AllHooksInstalled == false) {
+		// Stall for hooks to install
+		std::this_thread::sleep_for(200ms);
+	}
+
+	if (SerializationFunctionMap.size() == 0) {
+		// Enumerate the shader types and hook all of their serialization functions so we can intercept the entry 
+		// to the method.
+		hookAllShaderSerializationMethods();
+	}
+
+	std::cout << "Done.\n";
+	SerializeGlobalShaders_orig(platform, Ar);
+}
 
 // ================================================================================================
 // ASI INITIALIZATION
@@ -561,8 +710,11 @@ FArchive* FShaderSerialize_hook(FShader* shader, FArchiveFileReader* ar, void* u
 bool hookShaderResearch(ISharedProxyInterface* InterfacePtr) {
 
 	// PUT THIS FIRST AS SHADER SERIALIZATION HAPPENS EARLY!
-	FShaderSerialize = (tFShaderSerialize)SDKInitializer::Instance()->GetAbsoluteAddress(0x259b20); // LE1
-	InterfacePtr->InstallHook("FShaderSerialize", FShaderSerialize, FShaderSerialize_hook, (void**)&FShaderSerialize_orig);
+	SerializeGlobalShaders = (tSerializeGlobalShaders)SDKInitializer::Instance()->GetAbsoluteAddress(0x836d10); // LE1
+	InterfacePtr->InstallHook("SerializeGlobalShaders", SerializeGlobalShaders, SerializeGlobalShaders_hook, (void**)&SerializeGlobalShaders_orig);
+
+	//FShaderSerialize = (tFShaderSerialize)SDKInitializer::Instance()->GetAbsoluteAddress(0x259b20); // LE1
+	//InterfacePtr->InstallHook("FShaderSerialize", FShaderSerialize, FShaderSerialize_hook, (void**)&FShaderSerialize_orig);
 
 	DeregisterShader = (tDeregisterShader)SDKInitializer::Instance()->GetAbsoluteAddress(0x24e2c0); // LE1
 
