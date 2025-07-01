@@ -7,7 +7,7 @@
 #define GAMELE1
 
 #include "HookPrototypes.h"
-#include "ShaderResearch.h"
+#include "../../Shared-ASI/ShaderDecomp/ShaderResearch.h"
 
 SPI_PLUGINSIDE_SUPPORT(L"DebugLogger", L"5.0.0", L"ME3Tweaks", SPI_GAME_LE1, SPI_VERSION_ANY);
 SPI_PLUGINSIDE_PRELOAD;
@@ -264,7 +264,7 @@ SPI_IMPLEMENT_ATTACH
 
 	// Log debug output messages
 	INIT_HOOK_PATTERN(OutputDebugStringW);
-	hookLoggingFunctions(InterfacePtr);
+	//hookLoggingFunctions(InterfacePtr);
 	return true;
 
 	// REVERSE ENGINEERING STUFF ----------------------------
