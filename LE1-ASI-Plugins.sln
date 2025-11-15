@@ -35,6 +35,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1LinkerPrinter", "LinkerP
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1ConsoleExtension", "LE1ConsoleExtension\LE1ConsoleExtension.vcxproj", "{FD19784F-65ED-4C58-8922-CADF252A19FC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LE1DiscordIntegration", "LE1DiscordIntegration\LE1DiscordIntegration.vcxproj", "{F5C37F91-930C-4000-B0A0-C8C352636899}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -151,6 +153,14 @@ Global
 		{FD19784F-65ED-4C58-8922-CADF252A19FC}.Release|x64.Build.0 = Release|x64
 		{FD19784F-65ED-4C58-8922-CADF252A19FC}.Release|x86.ActiveCfg = Release|x64
 		{FD19784F-65ED-4C58-8922-CADF252A19FC}.Release|x86.Build.0 = Release|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Debug|x64.ActiveCfg = Debug|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Debug|x64.Build.0 = Debug|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Debug|x86.ActiveCfg = Debug|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Debug|x86.Build.0 = Debug|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Release|x64.ActiveCfg = Release|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Release|x64.Build.0 = Release|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Release|x86.ActiveCfg = Release|x64
+		{F5C37F91-930C-4000-B0A0-C8C352636899}.Release|x86.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

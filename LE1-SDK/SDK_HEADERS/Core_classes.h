@@ -1792,12 +1792,26 @@ public:
 
 UClass* UState::pClassPointer = NULL;
 
+struct FRepRecord final {
+	UProperty* Prop;
+	int Index;
+};
+
 // Class Core.Class
 // 0x00E8 (0x0220 - 0x0138)
 class UClass : public UState
 {
 public:
-	unsigned char                                      UnknownData00[ 0xE8 ];                            		// 0x0138 (0x00E8) MISSED OFFSET
+		DWORD                           ClassFlags;                         // 0x0138 (0x04) - NOT AUTO-GENERATED PROPERTY 
+		DWORD                           ClassCastFlags;                     // 0x013C (0x04) - NOT AUTO-GENERATED PROPERTY 
+		DWORD                           ClassUnique;                        // 0x0140 (0x04) - NOT AUTO-GENERATED PROPERTY 
+		UClass* ClassWithin;                        // 0x0144 (0x08) - NOT AUTO-GENERATED PROPERTY 
+		FName                         ClassConfigName;                    // 0x014C (0x08) - NOT AUTO-GENERATED PROPERTY 
+		TArray<FRepRecord>              ClassReps;                          // 0x0154 (0x10) - NOT AUTO-GENERATED PROPERTY 
+		TArray<UField*>                 NetFields;                          // 0x0164 (0x10) - NOT AUTO-GENERATED PROPERTY 
+		UObject* ClassDefaultObject;                 // 0x0174 (0x08) - NOT AUTO-GENERATED PROPERTY 
+
+		unsigned char                   UnknownData17C[0xA4];             // 0x017C (0xA4) - UNKNOWN DATA
 
 private:
 	static UClass* pClassPointer;
